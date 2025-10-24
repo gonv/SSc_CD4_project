@@ -17,3 +17,17 @@ The project focuses on characterizing the transcriptional programs of **CD4⁺ T
 All steps — from preprocessing to integration, clustering, and pathway analysis — are included.
 
 ---
+
+## ⚙️ Environment
+
+- **R 4.4.1**
+- **Seurat 5.0+**
+- **sctransform**, **harmony**, **fgsea**, **tidyverse**
+- **Python 3.10+**
+- **scanpy**, **scikit-learn**, **pandas**, **scipy**
+- Cluster: **BCH Compute (SLURM)**
+
+To reproduce the R environment:
+
+```bash
+conda create -n condaR441 r-base=4.4.1 r-seurat r-tidyverse r-harmony r-sctransform r-fgsea
