@@ -133,4 +133,4 @@ message("Saving reconstructed Seurat object...")
 
 saveRDS(temp_rec, "2025-10-24_SSc_CD4_so_process_fnl.rds")
 
-message("✅ Reconstruction completed successfully.")
+message("Reconstruction completed successfully.")
