@@ -37,6 +37,7 @@ message("Loading metadata and raw counts...")
 
 meta_ssc <- read.csv("../sc_ob/ssc_CD4_process_metadata.csv")
 counts <- readMM("../sc_ob/ssc_CD4_counts_raw.mtx")
+counts_process <- read.csv("../sc_ob/ssc_CD4_counts_process.csv")
 
 genes  <- read.csv("../sc_ob/ssc_CD4_features.tsv", sep = "\t", header = TRUE)
 cells  <- read.csv("../sc_ob/ssc_CD4_barcodes.tsv", sep = "\t", header = TRUE)
@@ -59,6 +60,13 @@ temp_rec <- CreateSeuratObject(
   assay = "RNA",
   project = "SSc"
 )
+
+# Adjusted processed count matrix
+rownames(counts_process) <- counts_process$X
+counts_process <- counts_process %>% select(-X)
+counts_process <- as.matrix(t(counts_process))
+
+temp_rec[["RNA"]]@layers$data <- counts_process
 
 # -------------------------------
 # Load neighborhood graphs
