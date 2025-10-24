@@ -33,22 +33,16 @@ set.seed(42)
 # -------------------------------
 message("Loading metadata and raw counts...")
 
-meta_ssc <- read.csv("../sc_ob/ssc_CD4_process_metadata.csv")
+meta_ssc <- read.csv("../sc_ob/ssc_CD4_process_metadata.csv",row.names=1)
 counts <- readMM("../sc_ob/ssc_CD4_counts_raw.mtx")
-counts_process <- read.csv("../sc_ob/ssc_CD4_counts_process.csv")
+counts_process <- read.csv("../sc_ob/ssc_CD4_counts_process.csv",row.names=1)
 
-genes  <- read.csv("../sc_ob/ssc_CD4_features.tsv", sep = "\t", header = TRUE)
-cells  <- read.csv("../sc_ob/ssc_CD4_barcodes.tsv", sep = "\t", header = TRUE)
+genes  <- read.csv("../sc_ob/ssc_CD4_features.tsv", sep = "\t", header = TRUE,row.names=1)
+cells  <- read.csv("../sc_ob/ssc_CD4_barcodes.tsv", sep = "\t", header = TRUE,row.names=1)
 
 # Ensure proper dimensions and names
-rownames(cells) <- cells$X
-cells <- cells %>% select(-X)
-
 colnames(counts) <- genes$gene_symbol
 rownames(counts) <- rownames(cells)
-
-rownames(meta_ssc) <- meta_ssc$X
-meta_ssc <- meta_ssc %>% select(-X)
 
 # Create Seurat object
 message("Creating Seurat object...")
@@ -60,11 +54,17 @@ temp_rec <- CreateSeuratObject(
 )
 
 # Adjusted processed count matrix
-rownames(counts_process) <- counts_process$X
-counts_process <- counts_process %>% select(-X)
-counts_process <- as.matrix(t(counts_process))
+counts_process <- as.matrix(counts_process)
+storage.mode(counts_process) <- "numeric"
+counts_process <- Matrix(counts_process, sparse = TRUE)
+counts_process <- t(counts_process)
 
-temp_rec[["RNA"]]@layers$data <- counts_process
+temp_rec <- SetAssayData(
+  object = temp_rec,
+  assay = "RNA",
+  layer = "data",
+  new.data = counts_process
+)
 
 # -------------------------------
 # Load neighborhood graphs
