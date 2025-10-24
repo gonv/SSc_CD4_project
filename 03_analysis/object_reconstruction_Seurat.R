@@ -16,11 +16,9 @@ setwd("/lab-share/IM-Gutierrez-e2/Public/gvillanueva/00_CD4/analysis/")
 .libPaths("/home/ch258010/miniconda3/envs/condaR441/lib/R/library")
 
 # Packages
-data_lib <- c("devtools","tidyverse","msigdbr","fgsea","forcats","purrr",
-              "readr","tibble","stringr","data.table")
+data_lib <- c("devtools","tidyverse")
 Seurat_lib <- c("Seurat","harmony","sctransform")
-Single_cell <- c("Matrix","parallel","magrittr","umap","presto","ggtree","aricode","genesorteR")
-ploting_lib <- c("pheatmap","RColorBrewer","ggridges","patchwork","cowplot","viridis","gridExtra","ggpubr")
+Single_cell <- c("Matrix")
 
 # Load all packages quietly
 message("Loading required packages...")
