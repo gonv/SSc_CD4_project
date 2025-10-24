@@ -90,9 +90,7 @@ pca_ssc <- pca_ssc %>% select(-gene_symbol)
 colnames(pca_ssc) <- paste0("PC_", seq_len(ncol(pca_ssc)))
 
 # PCA embeddings (per cell)
-pca_emb <- read.csv("../sc_ob/ssc_CD4_pca_embeddings.csv")
-rownames(pca_emb) <- pca_emb$X
-pca_emb <- pca_emb %>% select(-X)
+pca_emb <- read.csv("../sc_ob/ssc_CD4_pca_embeddings.csv",row.names=1)
 colnames(pca_emb) <- paste0("PC_", seq_len(ncol(pca_emb)))
 
 pca_emb <- as.matrix(pca_emb)
@@ -103,9 +101,7 @@ storage.mode(pca_emb) <- "numeric"
 # -------------------------------
 message("Loading UMAP embeddings...")
 
-umap_emb <- read.csv("../sc_ob/ssc_CD4_umap_embeddings.csv")
-rownames(umap_emb) <- umap_emb$X
-umap_emb <- umap_emb %>% select(-X)
+umap_emb <- read.csv("../sc_ob/ssc_CD4_umap_embeddings.csv",row.names=1)
 
 umap_emb <- as.matrix(umap_emb)
 storage.mode(umap_emb) <- "numeric"
