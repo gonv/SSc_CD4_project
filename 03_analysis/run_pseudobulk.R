@@ -1,7 +1,6 @@
 #!/usr/bin/env Rscript
 
 ## ============================================================
-## Gonzalo Villanueva-Martin, Ph.D.
 ## Pseudobulk differential expression (CTRL vs SSc) with LM
 ## Adjusted for donor and library size (cell_umi)
 ## ============================================================
@@ -18,12 +17,11 @@ data_lib <- c("devtools","tidyverse","forcats","purrr","readr",
               "tibble","stringr","data.table","DT")
 pathway_lib <- c("msigdbr","fgsea")
 RNAseq_lib <- c("edgeR","lme4")
-Seurat_lib <- c("Seurat","harmony","sctransform","MAST","scater")
-Single_cell <- c("Matrix","parallel","magrittr","umap","presto",
-                 "ggtree","aricode","genesorteR")
 ploting_lib <- c("pheatmap","RColorBrewer","ggridges","patchwork",
                  "cowplot","viridis","gridExtra","ggpubr","NMF",
                  "purrr","ggrepel")
+Seurat_lib <- c("Seurat","harmony","sctransform","MAST","scater")
+Single_cell <- c("Matrix","parallel","magrittr","umap","presto","ggtree","aricode","genesorteR")
 
 message("Data wrangling packages")
 lapply(data_lib, function(x) suppressMessages(suppressWarnings(require(x, character.only = TRUE))))
@@ -32,11 +30,11 @@ message("Pathway analysis packages")
 lapply(pathway_lib, function(x) suppressMessages(suppressWarnings(require(x, character.only = TRUE))))      
 
 message("RNA-seq data management")
-lapply(RNAseq_lib, function(x) suppressMessages(suppressWarnings(require(x, character.only = TRUE))))      
+lapply(RNAseq_lib, function(x) suppressMessages(suppressWarnings(require(x, character.only = TRUE))))         
 
 message("Single cell data management")
 lapply(Seurat_lib, function(x) suppressMessages(suppressWarnings(require(x, character.only = TRUE))))
-lapply(Single_cell, function(x) suppressMessages(suppressWarnings(require(x, character.only = TRUE))))     
+lapply(Single_cell, function(x) suppressMessages(suppressWarnings(require(x, character.only = TRUE)))) 
 
 message("Plotting data packages")
 lapply(ploting_lib, function(x) suppressMessages(suppressWarnings(require(x, character.only = TRUE))))
@@ -51,24 +49,22 @@ source("/lab-share/IM-Gutierrez-e2/Public/Qian/B_Atlas/analysis_scripts/Some_fun
 ## ------------------------------------------------------------
 ## Differential expression function (per gene)
 ## ------------------------------------------------------------
-diffexp_pseudobulk <- function(gexp, gname, group, donor, cell_umi) {
+diffexp_pseudobulk <- function(gexp, gname, group, cell_umi) {
   # gexp: numeric vector of log2(CPM+1) for one gene across samples
   # group: factor with levels c("CTRL","SSc")
-  # donor: factor indicating donor ID per sample
   # cell_umi: numeric covariate (log2 total UMI per sample)
   
   df <- data.frame(
     gexp     = as.numeric(gexp),
     group    = group,
-    donor    = donor,
     cell_umi = cell_umi
   )
   
   # Full model: condition + donor + library size
-  m_full <- lm(gexp ~ group + donor + cell_umi, data = df)
-  
+  m_full <- lm(gexp ~ group + cell_umi, data = df)
+
   # Null model: donor + library size only
-  m_null <- lm(gexp ~ donor + cell_umi, data = df)
+  m_null <- lm(gexp ~ cell_umi, data = df)
   
   # Likelihood ratio test between null and full model
   m_lrt <- anova(m_null, m_full, test = "LRT")
@@ -125,8 +121,10 @@ stopifnot(all(colnames(counts) == meta_ssc$cell))
 all_collapse <- collapse_counts(
   counts,
   meta_ssc,
-  c("R09", "Sample", "condition")
+  c("Sample", "condition")
 )
+
+all_collapse %>% str
 # all_collapse$counts_mat: genes x pseudobulk-samples
 # all_collapse$meta_data: data.frame with R09, Sample, condition, sample_id
 
@@ -139,6 +137,7 @@ genes_exclude <- grep("^MT-|^RPL|^RPS|MALAT1|MIR-",
 keep_genes <- setdiff(rownames(all_collapse$counts_mat), genes_exclude)
 
 counts_filtered <- all_collapse$counts_mat[keep_genes, ]
+counts_filtered %>% length
 
 ## ------------------------------------------------------------
 ## Filter lowly expressed genes with edgeR::filterByExpr
@@ -166,12 +165,12 @@ gene_ids <- rownames(tmp)
 ## ------------------------------------------------------------
 ## Build design variables for the linear model
 ## ------------------------------------------------------------
-donor <- factor(all_collapse$meta_data$Sample)  # donor/sample ID per pseudobulk
+#donor <- factor(all_collapse$meta_data$Sample)  # donor/sample ID per pseudobulk
 cell_umi <- apply(all_collapse$counts_mat, 2, function(x) log2(sum(x) + 1))
 
 # Safety checks
 stopifnot(length(group)    == ncol(tmp))
-stopifnot(length(donor)    == ncol(tmp))
+#stopifnot(length(donor)    == ncol(tmp))
 stopifnot(length(cell_umi) == ncol(tmp))
 
 ## ------------------------------------------------------------
@@ -184,16 +183,17 @@ results_list <- lapply(seq_len(nrow(tmp)), function(i) {
     gexp  = tmp[i, ],
     gname = gene_ids[i],
     group = group,
-    donor = donor,
     cell_umi = cell_umi
   )
 })
 
 results <- do.call(rbind, results_list)
+results %>% head
 
 ## ------------------------------------------------------------
 ## Prepare result table with FDR and labels
 ## ------------------------------------------------------------
+message("Preparing results")
 results_temp <- results[, c("Gene","Estimate","StdError","tValue","Pvalue")]
 colnames(results_temp) <- c("gene","Estimate", "Std_error", "t_value", "p_value")
 rownames(results_temp) <- seq_len(nrow(results_temp))
@@ -204,8 +204,8 @@ results_temp$adj.P.Val   <- p.adjust(results_temp$p_value, method = "fdr")
 
 # Label significant results
 results_temp$significance <- dplyr::case_when(
-  results_temp$adj.P.Val < 0.05 & results_temp$Estimate >  0.25 ~ "Upregulated",
-  results_temp$adj.P.Val < 0.05 & results_temp$Estimate < -0.25 ~ "Downregulated",
+  results_temp$adj.P.Val < 0.05 ~ "Upregulated",
+  results_temp$adj.P.Val < 0.05 ~ "Downregulated",
   TRUE ~ "Not_significant"
 )
 
@@ -213,10 +213,12 @@ results_temp$delabel <- NA
 results_temp$delabel[results_temp$significance != "Not_significant"] <-
   results_temp$gene[results_temp$significance != "Not_significant"]
 
+results_temp %>% head
+
 ## ------------------------------------------------------------
 ## Save results
 ## ------------------------------------------------------------
 message("Saving results to CSV")
-write.csv(results_temp, "pseudobulk_condition_v4.csv", row.names = FALSE)
+write.csv(results_temp, "pseudobulk_condition_v5.csv", row.names = FALSE)
 
 message("Pseudobulk DE analysis completed successfully.")
