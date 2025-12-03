@@ -112,20 +112,23 @@ diffexp_pseudobulk <- function(gexp, gname, group, cell_umi) {
 message("Loading Seurat object")
 temp_rec <- readRDS("2025-10-24_SSc_CD4_so_process_fnl_v3.rds")
 
-temp_rec@graphs <- list() # removing the graphs as return an error when subsetting
-
-# subseting the by cluster
-temp_cluster <- subset(temp_rec, subset = R09 == as.character(cluster_id))
-
 # sanity checks to ensure enough cells per cluster
-table(temp_cluster$Sample, temp_cluster$condition)
+table(temp_rec$Sample, temp_rec$condition)
 
 # Raw counts (genes x cells)
-counts <- temp_cluster@assays$RNA@layers$counts
+counts_raw <- temp_rec@assays$RNA@layers$counts
+counts_raw %>% str
 
 # Metadata
-meta_ssc <- temp_cluster@meta.data
+meta_ssc <- temp_rec@meta.data
 meta_ssc$cell <- rownames(meta_ssc)
+meta_ssc <- meta_ssc %>% filter(R09==as.character(cluster_id))
+
+cell_cluster <- meta_ssc$cell
+
+counts <- counts_raw[, cell_cluster, drop = FALSE]
+counts %>% dim
+counts %>% str
 
 ## ------------------------------------------------------------
 ## Generate pseudobulk matrix
@@ -146,6 +149,12 @@ table(all_collapse$meta_data$Sample, all_collapse$meta_data$condition)
 # all_collapse$counts_mat: genes x pseudobulk-samples
 # all_collapse$meta_data: data.frame with R09, Sample, condition, sample_id
 
+message("Cells per sample in this cluster:")
+table(meta_ssc$Sample)
+
+message("Counts matrix dimensions BEFORE filtering:")
+print(dim(all_collapse$counts_mat))
+
 ## ------------------------------------------------------------
 ## Gene filtering: remove mitochondrial / ribosomal / MALAT1 / MIR-
 ## ------------------------------------------------------------
@@ -156,6 +165,9 @@ keep_genes <- setdiff(rownames(all_collapse$counts_mat), genes_exclude)
 
 counts_filtered <- all_collapse$counts_mat[keep_genes, ]
 counts_filtered %>% length
+
+message("Counts matrix dimensions AFTER removing MT/RPL/RPS/etc:")
+print(dim(counts_filtered))
 
 ## ------------------------------------------------------------
 ## Filter lowly expressed genes with edgeR::filterByExpr
@@ -241,3 +253,5 @@ filename <- paste0("/lab-share/IM-Gutierrez-e2/Public/gvillanueva/00_CD4/results
 write.csv(results_temp, filename, row.names = FALSE)
 
 message("Pseudobulk DE analysis completed successfully.")
+
+sessionInfo()
