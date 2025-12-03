@@ -204,8 +204,8 @@ results_temp$adj.P.Val   <- p.adjust(results_temp$p_value, method = "fdr")
 
 # Label significant results
 results_temp$significance <- dplyr::case_when(
-  results_temp$adj.P.Val < 0.05 ~ "Upregulated",
-  results_temp$adj.P.Val < 0.05 ~ "Downregulated",
+  results_temp$adj.P.Val < 0.05 & results_temp$Estimate > 0  ~ "Upregulated",
+  results_temp$adj.P.Val < 0.05 & results_temp$Estimate < 0 ~ "Downregulated",
   TRUE ~ "Not_significant"
 )
 
