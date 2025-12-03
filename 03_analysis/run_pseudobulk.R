@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 ## ============================================================
-## Gonzalo Villanueva-Martin
+## Gonzalo Villanueva-Martin, Ph.D.
 ## Pseudobulk differential expression (CTRL vs SSc) with LM
 ## Adjusted for donor and library size (cell_umi)
 ## ============================================================
