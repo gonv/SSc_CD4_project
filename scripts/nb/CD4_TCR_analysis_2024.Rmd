@@ -1,0 +1,3581 @@
+---
+title: "CD4_TCR_analysis_2024"
+author: "GonzaloVillanuevaMartin"
+date: "2024-05-30"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Library load
+
+```{r Library load}
+#setwd('')
+
+data_lib <- c("dplyr","tidyr","ggplot2","devtools","usethis","RColorBrewer","ggpubr","qqplotr","patchwork","gt","GhibliBrewer","ggbreak","cowplot")
+sc_lib <- c("Seurat","SeuratData","SeuratWrappers","monocle3","destiny")
+
+lapply(data_lib, require, character.only = TRUE)
+lapply(sc_lib, require, character.only = TRUE)
+
+#source("/scratch1/gonv/workbench/SingleCell/RscriptsForSingleCell/GeneOntologyFunction.R")
+#source("/scratch1/gonv/workbench/SingleCell/RscriptsForSingleCell/GeneSummaryFunction.R")
+```
+
+# Preliminary load
+```{r}
+nonremoveObj <- c("CD4Th","dbs_21","nonremoveObj","myPallete2","SampleList","clusterCols","color_ct","color_con","color_subC","DEGcleaner","ReactomeGOanalysis","SScCD4","test_toCompare","test_toCompare_sero","SScCD4_down","dm","colorTh","clusterCols","subtype","ThClusterCount","ThCTCount")
+SampleList <- c("CTRL1","CTRL3","CTRL5","CTRL6","CTRL10","CTRL11","CTRL12","CTRL13","SSc2","SSc3","SSc4","SSc5","SSc7","SSc10","SSc11","SSc12")
+subtype <- data.frame(sample = c('SSc2','SSc3','SSc4','SSc5','SSc7','SSc10','SSc11','SSc12'), SScSubtype=c('lcSSc','lcSSc','lcSSc','dcSSc','lcSSc','lcSSc','dcSSc','lcSSc'))
+clinSub <- c("CTRL","SSc","lcSSc","dcSSc")
+colorSub <- c("#9932CC","#FFD700","#228B22")
+newnames <- c("X","raw","SSc","CTRL","CTRL1","CTRL2","CTRL3","CTRL4","CTRL5","CTRL6","CTRL7","CTRL8","SSc1","SSc2","SSc3","SSc4","SSc5","SSc6","SSc7","SSc8")
+newnames2 <- c("CTRL1","CTRL2","CTRL3","CTRL4","CTRL5","CTRL6","CTRL7","CTRL8","SSc1","SSc2","SSc3","SSc4","SSc5","SSc6","SSc7","SSc8")
+```
+
+# T helper subclustering
+```{r}
+#Convert("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/scRNAseq_SSc_CD4_ThSubclustering.h5ad", dest = "h5seurat", overwrite = TRUE)
+
+#CD4Th <- LoadH5Seurat("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/scRNAseq_SSc_CD4_ThSubclustering.h5seurat",assays = "RNA")
+
+colorTh <- c('#FF55A3','#FF9F55','#559FFF','#55FF9F','#FFC255')
+
+clusterCols <- c("#CDB4DB", "#F78181", "#82CFFD", "#8FCFD1", "#AEB6BF", "#F7ACB4", "#FFB347", "#7FFFD4", "#F4D03F", '#F8D5E1', "#fc6daf",  "#2ECC71")
+color_con <- c("#9932CC","#228B22")
+```
+
+
+# Clonotype analysis -- old
+
+```{r}
+ThCounts <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/subclusterization/Th_SC/scRNAseq_SScCD4_Subcluster_ThClusters_count_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+
+ThCounts <- ThCounts[,-1] #quitamos las dos primeras columnas
+ThCounts[10,] <- colSums(ThCounts)
+
+ThCounts_t <-as.data.frame(mapply('/',ThCounts[c(1:9),],ThCounts[10,]))
+ThCounts_t$R1 <- ThCounts$R1[c(1:9)]
+
+ThCounts_t$MeanCTRL <- rowMeans(ThCounts_t[,c(5:12)])
+ThCounts_t$MeanSScs <- rowMeans(ThCounts_t[,c(13:20)])
+
+leidenCtrl <- data.frame(Cluster=ThCounts_t$R1,ThCounts_t[,c(5:12)]) #tabla con solo la info que necesitamos
+leidenCtrl <- as.data.frame(t(leidenCtrl))
+leidenCtrl <- tibble::rownames_to_column(leidenCtrl, "sample")
+
+leidenCtrl2 <- data.frame()
+p <- 0
+k <- 1
+for(n in 2:ncol(leidenCtrl)){
+  p <- p+8
+  leidenCtrl2[c(k:p),1] <- leidenCtrl[c(2:9),1] #Sample name
+  leidenCtrl2[c(k:p),2] <- as.character(round(leidenCtrl[1,n],1)) #cluster
+  leidenCtrl2[c(k:p),3] <- leidenCtrl[c(2:9),n] #aportacion
+  leidenCtrl2[c(k:p),4] <- "CTRL" #condition
+  k <- k+8
+}
+
+leidenCs <- data.frame(Cluster=ThCounts_t$R1,ThCounts_t[,c(13:20)])
+leidenCs <- as.data.frame(t(leidenCs))
+leidenCs <- tibble::rownames_to_column(leidenCs, "sample")
+leidenCs2 <- data.frame()
+p <- 0
+k <- 1
+for(n in 2:ncol(leidenCs)){
+  p <- p+8
+  leidenCs2[c(k:p),1] <- leidenCs[c(2:9),1] #Sample name
+  leidenCs2[c(k:p),2] <- as.character(round(leidenCs[1,n],1)) #cluster
+  leidenCs2[c(k:p),3] <- leidenCs[c(2:9),n] #aportacion
+  leidenCs2[c(k:p),4] <- "SSc" #condition
+  k <- k+8
+}
+
+leiden <- rbind(leidenCtrl2,leidenCs2) #Unimos las tablas de los casos y CTRLes
+
+leiden$Contribution2 <- round(leiden$V3*100,2)
+leidenCs2$Contribution2 <- round(leidenCs2$V3*100,2)
+leidenCtrl2$Contribution2 <- round(leidenCtrl2$V3*100,2)
+
+colnames(leiden) <- c("Sample", "Cluster","Contribution","Condition","ContributionPercent") #Renombramos
+colnames(leidenCs2) <- c("Sample", "Cluster","Contribution","Condition","ContributionPercent") #Renombramos
+colnames(leidenCtrl2) <- c("Sample", "Cluster","Contribution","Condition","ContributionPercent") #Renombramos
+
+Fraction_SScs <- data.frame(Cluster=ThCounts_t$R1,Cells=ThCounts_t$SSc,Condition='SSc')
+Fraction_SScs$Percent <- round(Fraction_SScs$Cells*100,2)
+Fraction_ctrl <- data.frame(Cluster=ThCounts_t$R1,Cells=ThCounts_t$CTRL,Condition='CTRL')
+Fraction_ctrl$Percent <- round(Fraction_ctrl$Cells*100,2)
+Fraction <- rbind(Fraction_SScs,Fraction_ctrl)
+
+ThClusterCount <- leiden
+ThCTCount <- Fraction
+
+gt_Fraction <- gt(Fraction)
+gt_Fraction <- 
+  gt_Fraction |>
+  tab_header(
+    title = md("**Percent of cells per Cluster for each condition**"),
+  )
+gt_Count <- gt(leiden)
+gt_Count <- 
+  gt_Count |>
+  tab_header(
+    title = md("**Counts per Cluster for each individual**"),
+  )
+gt_Count
+gt_Fraction
+```
+
+### Plots
+```{r}
+
+q <- ggplot(ThCTCount, aes(fill=factor(Cluster, levels = c("8","7","6","5","4","3","2","1","0")), x= factor(Condition,levels = c("CTRL","SSc")), y=Percent)) + 
+  geom_bar(stat = "identity", color='black')+
+  labs(fill="Cluster",x=NULL,y="Fraction of cells")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position="",
+        legend.key = element_rect(fill = "lightblue", color = NA),
+        legend.key.size = unit(1.5, "cm"),
+        legend.key.width = unit(0.5,"cm"), 
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_text(size=18,face="bold"),
+        plot.margin = unit(c(0,3,0,3), "lines"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=rev(clusterCols),
+                    labels = c("8","7","6","5","4","3","2","1","0"))+
+  scale_x_discrete()
+
+q1 <- ggplot(leiden, aes(fill=factor(Cluster, levels = c("8","7","6","5","4","3","2","1","0")), x=factor(Sample,levels = newnames), y=ContributionPercent)) + 
+  geom_bar(stat = "identity", color='black',width = 1)+
+  labs(fill="Cluster",x=NULL,y="Fraction of cells")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position="none",
+        #legend.key = element_rect(fill = "lightblue", color = NA),
+        legend.key.size = unit(0.5, "cm"),
+        legend.key.width = unit(0.5,"cm"),
+        legend.title = element_text(size=21),
+        legend.text = element_text(size=21),
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_blank())+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=rev(clusterCols),
+                    labels = c("8","7","6","5","4","3","2","1","0"))+
+  scale_x_discrete()
+
+
+q2 <- ggplot(ThClusterCount, aes(x=factor(Condition, levels =c("CTRL","SSc") ), y=Contribution, fill=Condition)) + 
+  geom_violin(alpha=0.5)+
+  geom_boxplot(width=0.3)+
+  geom_dotplot(binaxis='y', stackdir='center')+
+  facet_wrap(~factor(Cluster, levels = c("0","1","2","3","4","5","6","7","8")),scales = "free",strip.position = "left")+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank())+
+  scale_x_discrete()+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c("#228B22","#9932CC"))
+q1
+q
+
+wrap_plots(q,q1,widths = c(1,2))
+
+```
+### Statistical analysis 
+```{r}
+ggqqplot(leiden, x="Contribution",ggtheme = theme_pubclean())+
+  facet_wrap(~Cluster)
+
+#diagrama de densidad
+ggplot(leiden, aes(x=Contribution))+
+  geom_density(fill="#756bb1")+
+  theme_classic()+
+  geom_vline(aes(xintercept=mean(Contribution)),color="red", linetype="dashed", size=.5)+
+  facet_wrap(~Cluster)
+
+#hacemos la estadistica
+Stest <- list()
+testpval <- data.frame()
+for(n in c(0:8)){
+  leiden_temp <- leiden %>% filter(leiden$Cluster==n)
+  n <- n+1 #Truqi para que el cluster 0 se guarde en la primera posicion
+  Stest[n] <- list(shapiro.test(leiden_temp$Contribution)) #Saphiro test, nos dira si siguen o no distribucion normal
+  testpval[n,1] <- Stest[n][[1]][2]
+  testpval[n,2] <- leiden_temp$Cluster[n]
+}
+
+#Sacamos los clusters que no siguen una distribucion normal
+nonNormalCluster <- testpval %>% filter(testpval$p.value < 0.05)
+print(nonNormalCluster)
+#En nuestro caso, la mitad de los clusters parece que no siguen una distribucion normal, por lo que aplicaremos el test estadistico mas comun para estos casos, el U-mann Whitney (wilcoxon)
+#U-mann Whitney test // Wilcoxon test
+
+wilcoxon_list <- list()
+for (n in 1:nrow(ThCounts_t)) {
+  temp1 <- c(unlist(ThCounts_t[n,c(5:12)]))
+  temp2 <- c(unlist(ThCounts_t[n,c(13:20)]))
+  wilcoxon_list[n] <- list(wilcox.test(temp1,temp2))
+}
+
+Th_test <- data.frame() #sacamos los pvalores en un dataframe que luego fuisonaremos
+for(n in c(1:9)){
+  Th_test[n,1] <- wilcoxon_list[[n]][3]
+}
+Th_test$FDR_wilcoxon <- p.adjust(Th_test$p.value,method = "fdr")
+
+
+#Creamos la tabla final con los datos
+Th_table <- cbind(ThCounts_t,Th_test)
+#seleccionamos las columnas que nos interesan y las renombramos
+Th_table_2 <- Th_table[,c("R1","CTRL1","CTRL3","CTRL5","CTRL6","CTRL10","CTRL11","CTRL12","CTRL13","SSc2","SSc3","SSc4","SSc5","SSc7","SSc10","SSc11","SSc12","CTRL","SSc","p.value")]
+names <- c("Cluster","Ssc_C1","Ssc_C3","Ssc_C5","Ssc_C6","Ssc_C10","Ssc_C11","Ssc_C12","Ssc_C13","SSc3","SSc4","SSc5","SSc7","SSc8","SSc10","SSc11","SSc12","Mean_CTRLs","Mean_SSc","p.value")
+colnames(Th_table_2) <- names
+
+Th_table_2$FDR <- p.adjust(Th_table_2$p.value, method = "BH")
+Th_table_2$BFN <- p.adjust(Th_table_2$p.value, method = "bonferroni")
+
+#Creamos otra table con los datos en porcentajes
+
+Th_table_3 <- Th_table_2[,c("Cluster","Mean_CTRLs","Mean_SSc","p.value","FDR","BFN")]
+Th_table_3$Mean_CTRLs <- Th_table_3$Mean_CTRLs*100
+Th_table_3$Mean_SSc <- Th_table_3$Mean_SSc*100
+Th_table_3 <- round(Th_table_3,3)
+
+gt_Statitics <- gt(Th_table_3)
+gt_Statitics <- 
+  gt_Statitics |>
+  tab_header(
+    title = md("**Mean of counts in each cluster per condition**")
+  ) |>
+  tab_footnote(
+    footnote = "FDR significance",
+    locations = cells_body(columns = FDR, 
+                           rows = num_range("",0.005:0.0005)
+    )
+  )
+gt_Statitics
+```
+
+# Clonal expansion
+```{r}
+#Load the data
+CD4_CT <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/counts/scRNAseq_SScCD4_Batch_SoskicCellType_count_HGV15PC20_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+clonalExpansion <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/subclusterization/Th_SC/scRNAseq_SScCD4_subclustering0_ThCellType_clonalExpansion_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+
+# Load the internal function
+
+contributionPercent <- function(db){
+
+  cellTypes <- as.vector(db$cellTypes)
+  
+  CTRLset <- db %>% select(starts_with("CTRL"))
+  rownames(CTRLset) <- cellTypes
+  
+  pctCTRL <- as.data.frame(t(CTRLset))
+  pctCTRL <- tibble::rownames_to_column(pctCTRL, "sample")
+  
+  pctCTRL2 <- data.frame()
+  p <- 0
+  k <- 1
+  for(n in 2:ncol(pctCTRL)){
+    p <- p+8
+    pctCTRL2[c(k:p),1] <- pctCTRL[c(1:8),1] #Sample name
+    pctCTRL2[c(k:p),2] <- colnames(pctCTRL)[n] #CT
+    pctCTRL2[c(k:p),3] <- pctCTRL[c(1:8),n] #aportacion
+    pctCTRL2[c(k:p),4] <- "CTRL" #condition
+    k <- k+8
+  }
+  
+  SScset <- db %>% select(starts_with("SSc"))
+  rownames(SScset) <- cellTypes
+  
+  pctSSc <- as.data.frame(t(SScset))
+  pctSSc <- tibble::rownames_to_column(pctSSc, "sample")
+  pctSSc2 <- data.frame()
+  p <- 0
+  k <- 1
+  for(n in 2:ncol(pctSSc)){
+    p <- p+8
+    pctSSc2[c(k:p),1] <- pctSSc[c(1:8),1] #Sample name
+    pctSSc2[c(k:p),2] <- colnames(pctSSc)[n]  #cluster
+    pctSSc2[c(k:p),3] <- pctSSc[c(1:8),n] #aportacion
+    pctSSc2[c(k:p),4] <- "SSc" #condition
+    k <- k+8
+  }
+  
+  percent <- rbind(pctCTRL2,pctSSc2) #Unimos las tablas de los casos y CTRLes
+  
+  percent$Contribution2 <- round(percent$V3*100,2)
+  pctSSc2$Contribution2 <- round(pctSSc2$V3*100,2)
+  pctCTRL2$Contribution2 <- round(pctCTRL2$V3*100,2)
+  
+  colnames(percent) <- c("Sample", "cellType","Contribution","Condition","ContributionPercent") #Renombramos
+  colnames(pctSSc2) <- c("Sample", "cellType","Contribution","Condition","ContributionPercent") #Renombramos
+  colnames(pctCTRL2) <- c("Sample", "cellType","Contribution","Condition","ContributionPercent") #Renombramos
+  
+  return(percent)
+}
+
+# porcentaje de clones expandidos del individuo en el total de clonotipos de Tcm para este individuo
+SScX <- 0
+SScX <- subset(clonalExpansion, sample=='SSc2')
+cellTypes <- unique(SScX$cellType)
+clonesCount <- aggregate(clonotype_id ~ cellType, data = SScX, FUN = function(x) length(unique(x)))
+clonesCount[6,2] <- sum(as.numeric(clonesCount$clonotype_id))
+clonesCount[6,1] <- "Total_clones"
+clonesCount$percentClones <- as.data.frame(mapply('/',clonesCount[c(1:6),2],clonesCount[6,2]))
+colnames(clonesCount[,3]) <- c("percent_clones")
+
+db <- clonalExpansion
+comp <- "cellType"
+strat <- "sample"
+idv <- "CTRL11"
+
+list_torm <- list("ID","strat","idv","clonesCount","clonesCount2","comp","clonesExpandidos_ID_temp","clonesExpandidos_ID","clonesExpandidos_ID_count_temp1","clonesExpandidos_ID_count_temp","clonesExpandidos_ID_count","dblayer","db")
+rm(list=ls()[ls() %in% list_torm])
+
+expansionClonal2 <- function(db, strat, idv) {
+  # Función para extraer datos de expansión clonal
+  ID <- db[db[[strat]] == idv, ] #sacamos exactamente la condicion o individuo que queremos
+  
+  #Sacamos los clones totales
+  clonesCount <- aggregate(clonotype_id ~ cellType, data = ID, FUN = function(x) length(unique(x))) #numero de clonotipos para cada tipo celular
+  cellTypes <- unique(clonesCount$cellType) #vector con los tipos celulares
+  
+  #sacamos los clones expandidos
+  clonesExpandidos_ID_temp <- data.frame(cellType=cellTypes,clonopyte_idExpan_temp=0) #creo un df para almacenar la info de los clonotipos por tipo celular
+  clonesExpandidos_ID <- ID[ID$clones != 1, ] #quito todos los clonotipos que tengan un solo clon 
+  clonesExpandidos_ID <- na.omit(clonesExpandidos_ID) #omito los na porque lo anterior quita esas filas y las cambia por na
+  clonesExpandidos_ID_count_temp1 <- aggregate(clonotype_id ~ cellType, data = clonesExpandidos_ID, FUN = function(x) length(unique(x))) #igual que arriba calculo cuantos clonotipos hay por tipo celular, solo que esta vez el numero de clonotipos sera menor al noe estar los de n=1
+  colnames(clonesExpandidos_ID_count_temp1)[2] <- c("clonopyte_idExpand") 
+  clonesExpandidos_ID_count_temp <- merge(clonesExpandidos_ID_temp,clonesExpandidos_ID_count_temp1,by="cellType",all.x=TRUE) #Unimos las dos tablas
+  clonesExpandidos_ID_count_temp[is.na(clonesExpandidos_ID_count_temp)] <- 0 #donde haya NA ponemos un 0
+  clonesExpandidos_ID_count <- subset(clonesExpandidos_ID_count_temp, select = -clonopyte_idExpan_temp) #nos quedamos con la columna con toda la info
+  
+  #generamos la tabla total de clones
+  clonesCount$ClonesExpandidos <- clonesExpandidos_ID_count$clonopyte_idExpand # incluimos en el df la columna con los clonotipos expandidos
+  l <- length(cellTypes)
+  t <- l+1
+  clonesCount[t, 2] <- sum(as.numeric(clonesCount[,2]))
+  clonesCount[t, 3] <- sum(as.numeric(clonesCount[c(1:l),3]))
+
+  # construimos la tabla final
+  clonesCount2 <-as.data.frame(mapply('/',clonesCount[c(1:l),c(2:3)],clonesCount[t,c(2:3)]))
+  colnames(clonesCount2) <- c("percent_clones","percent_clones_expanded")
+  clonesCount2$cellTypes <- cellTypes
+  return(clonesCount2)
+}
+
+SampleList <- c("CTRL1","CTRL3","CTRL5","CTRL6","CTRL10","CTRL11","CTRL12","CTRL13","SSc2","SSc3","SSc4","SSc5","SSc7","SSc10","SSc11","SSc12")
+SampleExp <- data.frame()
+i=0
+for (n in SampleList) {
+  i <- i+1
+  result <- expansionClonal2(clonalExpansion, "sample", n)
+  print((n))
+  if(isEmpty(SampleExp) == TRUE){
+    SampleExp <- as.data.frame(result[,2])
+    print(1)
+  }else{
+    SampleExp <-  cbind(SampleExp, result[,2])
+  }
+  colnames(SampleExp)[i] <- n
+}
+SampleExp$cellTypes <- result$cellTypes
+
+SScExp <- expansionClonal2(clonalExpansion,"condition","SSc")
+SScExp$condition <- "SSc"
+CTRLExp <- expansionClonal2(clonalExpansion,"condition","CTRL")
+CTRLExp$condition <- "CTRL"
+
+conExp <- rbind(SScExp[,c(2:4)],CTRLExp[,c(2:4)])
+conExp$ContributionPercent <- conExp$percent_clones_expanded*100
+
+SamplePercent <- contributionPercent(SampleExp)
+
+gt_Clones <- gt(SamplePercent)
+gt_Clones <- 
+  gt_Clones |>
+  tab_header(
+    title = md("**Mean of clonotypes in each cluster per condition**")
+  ) 
+gt_Clones
+
+
+```
+
+```{r}
+sq1 <- ggplot(SamplePercent, aes(fill=factor(cellType, levels =rev(c('Th17','Th2','Thf','Th22','Th1'))), x=Sample, y=ContributionPercent)) + 
+  geom_bar(stat = "identity", color='black')+
+  labs(fill= "Cell type" , x=NULL,y="Percent of clone expansion")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.key = element_rect(fill = "lightblue", color = NA),
+        legend.key.size = unit(1.5, "cm"),
+        legend.key.width = unit(0.5,"cm"), 
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_text(size=18,face="bold"),
+        plot.margin = unit(c(0,3,0,3), "lines"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values= rev(c('#FF55A3','#FF9F55','#559FFF','#55FF9F','#FFC255')),
+                    labels = rev(c('Th17','Th2','Thf','Th22','Th1')))
+sq1
+ggplot(conExp, aes(fill=cellTypes, x= condition, y=ContributionPercent)) + 
+  geom_bar(stat = "identity")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.key = element_rect(fill = "lightblue", color = NA),
+        legend.key.size = unit(1.5, "cm"),
+        legend.key.width = unit(0.5,"cm"), 
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_text(size=18,face="bold"),
+        plot.margin = unit(c(0,3,0,3), "lines"))
+
+
+sq2 <- ggplot(conExp, aes(fill=factor(cellTypes,levels =rev(c('Th17','Th2','Thf','Th22','Th1'))), x=condition, y=ContributionPercent)) + 
+  geom_bar(stat = "identity", color='black')+
+  labs(fill= "Cell type" , x=NULL,y="Percent of clone expansion")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position =  "",
+        legend.key = element_rect(fill = "lightblue", color = NA),
+        legend.key.size = unit(1.5, "cm"),
+        legend.key.width = unit(0.5,"cm"), 
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_text(size=18,face="bold"),
+        plot.margin = unit(c(0,3,0,3), "lines"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values= rev(c('#FF55A3','#FF9F55','#559FFF','#55FF9F','#FFC255')),
+                    labels = rev(c('Th17','Th2','Thf','Th22','Th1')))
+
+#wrap_plots(sq2,sq1,widths = c(1, 2)) #SSc vs CTRL
+cellt <- cellTypes
+```
+
+## Statistic analysis
+```{r}
+ggqqplot(SamplePercent, x="Contribution",ggtheme = theme_pubclean())+
+  facet_wrap(~cellType)
+
+#diagrama de densidad
+ggplot(SamplePercent, aes(x=Contribution))+
+  geom_density(fill="#756bb1")+
+  theme_classic()+
+  geom_vline(aes(xintercept=mean(Contribution)),color="red", linetype="dashed", size=.5)+
+  facet_wrap(~cellType)
+
+#hacemos la estadistica
+CellTypesList <- cellt
+Stest <- list()
+testpval <- data.frame()
+for(n in c(1:4)){
+  CellTypes_temp <- SamplePercent %>% filter(SamplePercent$cellType==CellTypesList[n])
+  Stest[n] <- list(shapiro.test(CellTypes_temp$Contribution)) #Saphiro test, nos dira si siguen o no distribucion normal
+  testpval[n,1] <- Stest[n][[1]][2]
+  testpval[n,2] <- CellTypes_temp$cellType[n]
+}
+
+nonNormalCluster <- testpval %>% filter(testpval$p.value < 0.05)
+print(nonNormalCluster)
+
+t_test_list <- list()
+for (n in 1:nrow(SampleExp)) {
+  t_test_list[n] <- list(t.test(SampleExp[n,c(1:8)],SampleExp[n,c(9:16)]))
+}
+
+CT_test <- data.frame() #sacamos los pvalores en un dataframe que luego fuisonaremos
+for(n in 1:nrow(SampleExp)){
+  CT_test[n,1] <- t_test_list[[n]][3]
+}
+CT_test$FDR_ttest <- p.adjust(CT_test$p.value,method = "fdr")
+CT_test$CellType <- cellt
+#print(CT_test)
+
+gt_Expanded <- gt(CT_test)
+gt_Expanded <- 
+  gt_Expanded |>
+  tab_header(
+    title = md("**Expanded clonotypes per cell type**")
+  ) 
+gt_Expanded
+
+```
+## Clusters clonotype analysis
+```{r}
+clonesExp <- read.csv("scRNAseq_SScCD4_OnlyExpandedClones_it92.csv", header=T, as.is=T,stringsAsFactors=FALSE) #load the clonotype table
+clonesExp <- clonesExp[,-1] #remove the first column
+
+ggplot(clonesExp, aes(x=R09, y=clone_size)) + 
+  geom_bar(stat = "identity")
+
+cluster3 <- clonesExp %>% filter(clonesExp$R09==3)
+cluster3NormalizeSize <- sum(cluster3$normalized_size)
+
+clusterNorms <- data.frame(R09 = integer(), NormalizedSize = numeric())
+for (n in c(0:11)) {
+  tempC <- clonesExp %>% filter(clonesExp$R09==n)
+  tempCNormalizeSize <- sum(tempC$normalized_size)
+  newRow <- data.frame(R09 = n, NormalizedSize = tempCNormalizeSize)
+  clusterNorms <- rbind(clusterNorms, newRow)
+}
+
+ggplot(clusterNorms, aes(x=R09, y=NormalizedSize)) + 
+  geom_bar(stat = "identity")
+
+clusterClones <- data.frame(R09 = integer(), Clones = numeric())
+for (n in c(0:11)) {
+  tempC <- clonesExp %>% filter(clonesExp$R09==n)
+  tempClones <- sum(tempC$clone_size)
+  newRow <- data.frame(R09 = n, clone_size = tempClones)
+  clusterClones <- rbind(clusterClones, newRow)
+}
+
+clusterClones$NormalSize <- clusterClones$clone_size/sum(clusterClones$clone_size)
+clusterClones$NormalSizetotal <- clusterClones$clone_size/81637
+
+ggplot(clusterClones, aes(x=R09, y=NormalSizetotal)) + 
+  geom_bar(stat = "identity")
+
+```
+
+```{r}
+clonesAll <- read.csv("scRNAseq_SScCD4_AllClones_it92.csv", header=T, as.is=T,stringsAsFactors=FALSE) #load the clonotype table
+clonesAll <- clonesAll[,-1] #remove the first column
+
+clusterClones <- data.frame(R09 = integer(), clone_Norm = numeric(), cloneID = integer(), clone_size=numeric())
+for (n in c(0:11)) {
+  tempC <- clonesAll %>% filter(clonesAll$R09==n)
+  tempClones <- sum(tempC$clone_size)
+  tempNorm <- tempC$clone_size/tempClones
+  newRow <- data.frame(R09 = n, clone_Norm = tempNorm, cloneID=tempC$clone_id, tempC$clone_size)
+  clusterClones <- rbind(clusterClones, newRow)
+}
+
+ExpClones <- clusterClones %>% filter(clusterClones$tempC.clone_size>2)
+
+clonesAll2 <- cbind(clonesAll,clusterClones)
+
+ggplot(ExpClones, aes(x=R09, y=clone_Norm)) + 
+  geom_bar(stat = "identity")
+
+```
+
+```{r}
+expansionThres <- 2  #Define expansion threshold
+clonesRatio <- data.frame(R09 = character(), Ratio = numeric())
+for (n in c(0:11)) {
+  temp <- clonesAll %>% filter(clonesAll$R09==n)
+  temp <- temp %>%
+    mutate(expansion = ifelse(clone_id_size >= expansionThres, "Expanded", "NonExpanded"))
+  expanded <- temp %>% filter(temp$expansion == 'Expanded')
+  nonexpan <- temp %>% filter(temp$expansion == 'NonExpanded')
+  ratio <- sum(expanded$clone_size)/sum(nonexpan$clone_size)
+  newRow <- data.frame(R09 = n, Ratio = ratio)
+  clonesRatio <- rbind(clonesRatio, newRow)
+}
+
+#Expansion by cluster
+clusterExpansionInfo <- data.frame()
+for (n in c(0:11)) {
+  temp <- clonesAll %>% filter(clonesAll$R09==n)
+  temp <- temp %>%
+    mutate(expansion = ifelse(clone_id_size >= expansionThres, "Expanded", "NonExpanded"))
+  temp$NormInCluster <- temp$clone_size/sum(temp$clone_size)
+  expaTemp <- temp %>% filter(temp$expansion=="Expanded")
+  NonExpaTemp <- temp %>% filter(temp$expansion=="NonExpanded")
+  expaC <- sum(expaTemp$NormInCluster)
+  nonexpaC <- sum(NonExpaTemp$NormInCluster)
+  ExpRow <- data.frame(R09 = n, NormalizedExpansion = expaC, Expansion = "Expanded")
+  NonExpRow <- data.frame(R09 = n, NormalizedExpansion = nonexpaC, Expansion = "NonExpanded")
+  ClusterInfo <- rbind(ExpRow,NonExpRow)
+  clusterExpansionInfo <- rbind(clusterExpansionInfo, ClusterInfo)
+}
+
+ExpandedClonesPlot <- ggplot(clusterExpansionInfo, aes(x =factor(R09, levels = c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11")), y = NormalizedExpansion, fill=Expansion)) + 
+  geom_bar(stat = "identity", position = "stack", width = 1, colour = "black")+
+  labs(title="Clonotype expansion by cluster",x="Clusters",y="Normalized clone size",color = "black", size = 0.9)+
+  theme_classic()+
+  theme()+
+  scale_fill_manual(values= c('#D23931','#F7AF3C'))
+
+#Expansion by condition
+conditionExpansionInfo <- data.frame()
+for (n in c("SSc","CTRL")) {
+  temp <- clonesAll %>% filter(clonesAll$condition == n)
+  temp <- temp %>%
+    mutate(expansion = ifelse(clone_id_size >= expansionThres, "Expanded", "NonExpanded"))
+  temp$NormInCondition <- temp$clone_size / sum(temp$clone_size)
+  expaTemp <- temp %>% filter(temp$expansion == "Expanded")
+  NonExpaTemp <- temp %>% filter(temp$expansion == "NonExpanded")
+  expaC <- sum(expaTemp$NormInCondition)
+  nonexpaC <- sum(NonExpaTemp$NormInCondition)
+  ExpRow <- data.frame(condition = n, NormalizedExpansion = expaC, Expansion = "Expanded")
+  NonExpRow <- data.frame(condition = n, NormalizedExpansion = nonexpaC, Expansion = "NonExpanded")
+  ConditionInfo <- rbind(ExpRow, NonExpRow)
+  conditionExpansionInfo <- rbind(conditionExpansionInfo, ConditionInfo)
+}
+
+SScExp <- conditionExpansionInfo %>% filter(conditionExpansionInfo$condition=="SSc")
+SScplot <- ggplot(SScExp, aes(x =condition, y = NormalizedExpansion)) + 
+  geom_bar(aes(fill=Expansion),stat="identity", width=1, color="white")+
+  geom_label(aes(label = (round(NormalizedExpansion*100, 2))), position = position_stack(vjust = 0.55))+
+  theme_classic()+
+  labs(title="SSc")+
+  theme(legend.title=element_blank(),
+        legend.position = "",
+        axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        plot.title = element_text(hjust = 0.45))+
+  coord_polar("y", start=0)+
+  scale_fill_manual(values= c('#D23931','#F7AF3C'))
+
+
+CTRLExp <- conditionExpansionInfo %>% filter(conditionExpansionInfo$condition=="CTRL")
+CTRLplot <- ggplot(CTRLExp, aes(x =condition, y = NormalizedExpansion)) + 
+  geom_bar(aes(fill=Expansion),stat="identity", width=1, color="white")+
+  geom_label(aes(label = (round(NormalizedExpansion*100, 2))), position = position_stack(vjust = 0.55))+
+  theme_classic()+
+  labs(title="CTRL")+
+  theme(legend.title=element_blank(),
+        legend.position ="",
+        axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        plot.title = element_text(hjust = 0.38))+
+  coord_polar("y", start=0)+
+  scale_fill_manual(values= c('#D23931','#F7AF3C'))
+
+
+pieplots <- wrap_plots(SScplot,CTRLplot,ncol = 1) #SSc vs CTRL
+wrap_plots(ExpandedClonesPlot,pieplots, widths = c(1.5,1))
+SScplot
+CTRLplot
+```
+
+```{r}
+cellt <-c("Tn","Tcm","Tem","Temra","Treg")
+expansionThres <- 2
+expansionThres <- 2  #Define expansion threshold
+clonesRatioCT <- data.frame(CellType = character(), Ratio = numeric())
+for (n in unique(clonesAll$cell_type)) {
+  temp <- clonesAll %>% filter(clonesAll$cell_type==n)
+  temp <- temp %>%
+    mutate(expansion = ifelse(clone_id_size >= expansionThres, "Expanded", "NonExpanded"))
+  expanded <- temp %>% filter(temp$expansion == 'Expanded')
+  nonexpan <- temp %>% filter(temp$expansion == 'NonExpanded')
+  ratio <- sum(expanded$clone_size)/sum(nonexpan$clone_size)
+  newRow <- data.frame(CellType = n, Ratio = ratio)
+  clonesRatioCT <- rbind(clonesRatioCT, newRow)
+}
+
+#Expansion by cluster
+cellTypeExpansionInfo <- data.frame()
+for (n in unique(clonesAll$cell_type)) {
+  temp <- clonesAll %>% filter(clonesAll$cell_type==n)
+  temp <- temp %>%
+    mutate(expansion = ifelse(clone_id_size >= expansionThres, "Expanded", "NonExpanded"))
+  temp$NormInCluster <- temp$clone_size/sum(temp$clone_size)
+  expaTemp <- temp %>% filter(temp$expansion=="Expanded")
+  NonExpaTemp <- temp %>% filter(temp$expansion=="NonExpanded")
+  expaC <- sum(expaTemp$NormInCluster)
+  nonexpaC <- sum(NonExpaTemp$NormInCluster)
+  ExpRow <- data.frame(cell_type = n, NormalizedExpansion = expaC, Expansion = "Expanded")
+  NonExpRow <- data.frame(cell_type = n, NormalizedExpansion = nonexpaC, Expansion = "NonExpanded")
+  cellTypeInfo <- rbind(ExpRow,NonExpRow)
+  cellTypeExpansionInfo <- rbind(cellTypeExpansionInfo, cellTypeInfo)
+}
+
+cellTypeExpansionInfo <- ggplot(cellTypeExpansionInfo, aes(x =factor(cell_type, levels= cellt), y = NormalizedExpansion, fill=Expansion)) + 
+  geom_bar(stat = "identity", position = "stack", width = 1, colour = "black")+
+  labs(title="Clonotype expansion by cell type",x="Cell_type",y="Normalized clone size",color = "black", size = 0.9)+
+  theme_classic()+
+  theme()+
+  scale_fill_manual(values= c('#D23931','#F7AF3C'))
+cellTypeExpansionInfo
+```
+
+##Plotting the clones size
+```{r}
+
+clonesExp$R09 <- as.character(clonesExp$R09)
+
+boxbyCluster <- ggplot(clonesExp, aes(x=factor(R09, levels= c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11")), y=clone_size, fill=condition)) + 
+  geom_boxplot(width=0.5, alpha = 0.5, position=position_dodge(1))+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(axis.text.x = element_text(size=20,face = "bold"),
+        axis.text.y = element_text(size=20),
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        title = element_text(size = 15))+
+  scale_fill_manual(values=c("#228B22","#9932CC"))+
+  ggtitle("Clones size by cluster")
+
+
+cellt <-c("Tn","Tcm","Tem","Temra","Treg")
+boxbyCell <- ggplot(clonesExp, aes(x=factor(cell_type, levels= cellt), y=clone_size, fill=condition)) + 
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  geom_boxplot(width=0.5, alpha = 0.5, position=position_dodge(1))+
+  theme_bw()+
+  theme(axis.text.x = element_text(size=20,face = "bold"),
+        axis.text.y = element_text(size=20),
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        title = element_text(size = 15))+
+  scale_fill_manual(values=c("#228B22","#9932CC"))+
+  ggtitle("Clones size by cell type")
+
+boxbyCell
+
+ggplot(clonesExp, aes(x=factor(cell_type, levels= cellt), y=clone_size, fill=condition)) + 
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  geom_boxplot(width=0.5, alpha = 0.5, position=position_dodge(1))+
+  theme_bw()+
+  theme(axis.text.x = element_text(size=20,face = "bold"),
+        axis.text.y = element_text(size=20),
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        title = element_text(size = 15))+
+  scale_fill_manual(values=c("#228B22","#9932CC"))+
+  ggtitle("Clones size by cell type")
+
+boxbyCell
+
+#wrap_plots(boxbyCluster,boxbyCell, widths = c(2,1))
+
+boxbyCluster
+boxbyCell
+
+```
+
+# Estadistica entre los clusters
+
+## Difference between in the clonal expansion in the clusters
+```{r}
+# Crear una tabla de contingencia
+clonesAll2$expanded <- ifelse(clonesAll2$clone_size >= expansionThres, "CE", "CNE")
+
+one_sided_p_value <- 0
+chi_squared_results <- data.frame(Cluster=integer(),X2_pval=numeric(),OneSideX2=numeric())
+for (cluster_id in c(0:11)) {
+  
+  clonesAll2$current_cluster <- ifelse(clonesAll2$R09 == cluster_id, "current_cluster", "other_clusters")
+  
+  print(cluster_id)
+  
+  cluster1 <- clonesAll2[clonesAll2$current_cluster=="current_cluster",]
+  cluster2 <- clonesAll2[clonesAll2$current_cluster=="other_clusters",]
+  
+  ContingC1 <- data.frame(CE=sum(cluster1$clone_size[cluster1$expanded=='CE']), CNE=sum(cluster1$clone_size[cluster1$expanded=='CNE']))
+  ContingC2 <- data.frame(CE=sum(cluster2$clone_size[cluster2$expanded=='CE']), CNE=sum(cluster2$clone_size[cluster2$expanded=='CNE']))
+  
+  contingency_table2 <- rbind(ContingC1[1,],ContingC2[1,])
+  chi_squared_test <-chisq.test(contingency_table2[,1])
+  
+  direction <- (contingency_table2[1, 1]/contingency_table2[1, 2]) > (contingency_table2[2, 1]/contingency_table2[2, 2]) 
+  if (direction) { one_sided_p_value <- chi_squared_test$p.value / 2} else { one_sided_p_value <- 1 - (chi_squared_test$p.value / 2)}
+  
+  chi_squared_results <- rbind(chi_squared_results, data.frame(
+      Cluster = cluster_id,
+      X2_pval = round(chi_squared_test$p.value,4),
+      OneSideX2 = round(one_sided_p_value,4)
+    ))
+}
+
+chi_squared_results$FDR <- round(p.adjust(chi_squared_results$OneSideX2, method = "BH"),4)  
+chi_squared_results
+
+gt_clonesCluster <- gt(chi_squared_results)
+gt_clonesCluster <- 
+  gt_clonesCluster |>
+  tab_header(
+    title = md("**X2 of the clonotype expansion between clusters**"),
+  )
+gt_clonesCluster
+
+```
+## Difference between conditions in the clonal expansion in cell types
+```{r}
+
+one_sided_p_value <- 0
+chi_squared_results_condition <- data.frame(Cluster=integer(),X2_pval=numeric(),OneSideX2=numeric())
+for (cluster_id in c(0:11)) {  
+  
+  clusterN <- clonesAll2[clonesAll2$R09==cluster_id,]
+  clusterN_SSc <- clusterN[clusterN$condition=="SSc",]
+  clusterN_CTRL <- clusterN[clusterN$condition=="CTRL",]
+  
+  ContingC1 <- data.frame(CE=sum(clusterN_SSc$clone_size[clusterN_SSc$expanded=='CE']), CNE=sum(clusterN_SSc$clone_size[clusterN_SSc$expanded=='CNE']))
+  ContingC2 <- data.frame(CE=sum(clusterN_CTRL$clone_size[clusterN_CTRL$expanded=='CE']), CNE=sum(clusterN_CTRL$clone_size[clusterN_CTRL$expanded=='CNE']))
+  
+  contingency_table2 <- rbind(ContingC1[1,],ContingC2[1,])
+  rownames(contingency_table2) <- c("SSc","CTRL")
+  chi_squared_test <-chisq.test(contingency_table2[,1])
+  
+  direction <- (contingency_table2[1, 1]/contingency_table2[1, 2]) > (contingency_table2[2, 1]/contingency_table2[2, 2]) # Example condition
+  # Calculate one-sided p-value considering the direction
+  if (direction) { one_sided_p_value <- chi_squared_test$p.value / 2} else { one_sided_p_value <- 1 - (chi_squared_test$p.value / 2)} 
+  
+    chi_squared_results_condition <- rbind(chi_squared_results_condition, data.frame(
+      Cluster = cluster_id,
+      X2_pval = round(chi_squared_test$p.value,4),
+      OneSideX2 = round(one_sided_p_value,4)
+  ))
+  
+}
+
+chi_squared_results_condition$FDR <- round(p.adjust(chi_squared_results_condition$OneSideX2, method = "BH"),4)  
+
+gt_clonesClusterCon <- gt(chi_squared_results_condition)
+gt_clonesClusterCon <- 
+  gt_clonesClusterCon |>
+  tab_header(
+    title = md("**X2 of the clonotype expansion between conditions in each cluster**"),
+  )
+gt_clonesClusterCon
+
+```
+## Difference between in the clonal expansion in cell types
+```{r}
+one_sided_p_value <- 0
+contingency_table2 <- 0
+chi_squared_results_CT <- data.frame(Cell_type=integer(),X2_pval=numeric(),OneSideX2=numeric())
+for (cellType_id in unique(clonesAll2$cell_type)) {
+  
+  clonesAll2$current_cluster <- ifelse(clonesAll2$cell_type == cellType_id, "current_cluster", "other_clusters")
+  
+  print(cellType_id)
+  
+  cluster1 <- clonesAll2[clonesAll2$current_cluster=="current_cluster",]
+  cluster2 <- clonesAll2[clonesAll2$current_cluster=="other_clusters",]
+  
+  ContingC1 <- data.frame(CE=sum(cluster1$clone_size[cluster1$expanded=='CE']), CNE=sum(cluster1$clone_size[cluster1$expanded=='CNE']))
+  ContingC2 <- data.frame(CE=sum(cluster2$clone_size[cluster2$expanded=='CE']), CNE=sum(cluster2$clone_size[cluster2$expanded=='CNE']))
+  
+  contingency_table2 <- rbind(ContingC1[1,],ContingC2[1,])
+  chi_squared_test <-chisq.test(contingency_table2[,1])
+  
+  direction <- (contingency_table2[1, 1]/contingency_table2[1, 2]) > (contingency_table2[2, 1]/contingency_table2[2, 2]) # Example condition
+  # Calculate one-sided p-value considering the direction
+  if (direction) { one_sided_p_value <- chi_squared_test$p.value / 2} else { one_sided_p_value <- 1 - (chi_squared_test$p.value / 2)}
+  
+  chi_squared_results_CT <- rbind(chi_squared_results_CT, data.frame(
+      Cell_type = cellType_id,
+      X2_pval = round(chi_squared_test$p.value,4),
+      OneSideX2 = round(one_sided_p_value,4)
+    ))
+}
+
+chi_squared_results_CT$FDR <- round(p.adjust(chi_squared_results_CT$OneSideX2, method = "BH"),4)  
+gt_clonesCellType <- gt(chi_squared_results_CT)
+gt_clonesCellType <- 
+  gt_clonesCellType |>
+  tab_header(
+    title = md("**X2 of the clonotype expansion between cell types**"),
+  )
+gt_clonesCellType
+
+```
+## Difference between condition in the clonal expansion in cell types
+```{r}
+
+one_sided_p_value <- 0
+chi_squared_results_CT_condition <- data.frame(CellType=integer(),X2_pval=numeric(),OneSideX2=numeric())
+for (cellType_id in unique(clonesAll2$cell_type)) {  
+  
+  clusterN <- clonesAll2[clonesAll2$cell_type==cellType_id,]
+  clusterN_SSc <- clusterN[clusterN$condition=="SSc",]
+  clusterN_CTRL <- clusterN[clusterN$condition=="CTRL",]
+  
+  ContingC1 <- data.frame(CE=sum(clusterN_SSc$clone_size[clusterN_SSc$expanded=='CE']), CNE=sum(clusterN_SSc$clone_size[clusterN_SSc$expanded=='CNE']))
+  ContingC2 <- data.frame(CE=sum(clusterN_CTRL$clone_size[clusterN_CTRL$expanded=='CE']), CNE=sum(clusterN_CTRL$clone_size[clusterN_CTRL$expanded=='CNE']))
+  
+  contingency_table2 <- rbind(ContingC1[1,],ContingC2[1,])
+  rownames(contingency_table2) <- c("SSc","CTRL")
+  chi_squared_test <-chisq.test(contingency_table2[,1])
+  
+  direction <- (contingency_table2[1, 1]/contingency_table2[1, 2]) > (contingency_table2[2, 1]/contingency_table2[2, 2]) # Example condition
+  # Calculate one-sided p-value considering the direction
+  if (direction) { one_sided_p_value <- chi_squared_test$p.value / 2} else { one_sided_p_value <- 1 - (chi_squared_test$p.value / 2)} 
+  
+    chi_squared_results_CT_condition <- rbind(chi_squared_results_CT_condition, data.frame(
+      CellType = cellType_id,
+      X2_pval = round(chi_squared_test$p.value,4),
+      OneSideX2 = round(one_sided_p_value,4)
+  ))
+  
+}
+
+chi_squared_results_CT_condition$FDR <- round(p.adjust(chi_squared_results_CT_condition$OneSideX2, method = "BH"),4)  
+  
+gt_clonesCellTypeCon <- gt(chi_squared_results_CT_condition)
+gt_clonesCellTypeCon <- 
+  gt_clonesCellTypeCon |>
+  tab_header(
+    title = md("**X2 of the clonotype expansion between conditions in each cell type**"),
+  )
+gt_clonesCellTypeCon
+
+```
+
+## Difference in the clonal expasion cell type subclustering
+```{r}
+clonalExpansion2 <- clonalExpansion
+
+clonalExpansion2$expanded <- ifelse(clonalExpansion2$clones >= expansionThres, "CE", "CNE")
+clonalExpansion2 <- na.omit(clonalExpansion2)
+
+one_sided_p_value <- 0
+contingency_table2 <- 0
+chi_squared_results_CT_subclustering <- data.frame(Cell_type=integer(),X2_pval=numeric(),OneSideX2=numeric())
+for (cellType_id in unique(clonalExpansion2$cellType)) {
+  
+  clonalExpansion2$current_cluster <- ifelse(clonalExpansion2$cellType == cellType_id, "current_cluster", "other_clusters")
+  
+  print(cellType_id)
+  
+  cluster1 <- clonalExpansion2[clonalExpansion2$current_cluster=="current_cluster",]
+  cluster2 <- clonalExpansion2[clonalExpansion2$current_cluster=="other_clusters",]
+  
+  ContingC1 <- data.frame(CE=sum(cluster1$clones[cluster1$expanded=='CE']), CNE=sum(cluster1$clones[cluster1$expanded=='CNE']))
+  ContingC2 <- data.frame(CE=sum(cluster2$clones[cluster2$expanded=='CE']), CNE=sum(cluster2$clones[cluster2$expanded=='CNE']))
+  
+  contingency_table2 <- rbind(ContingC1[1,],ContingC2[1,])
+  chi_squared_test <-chisq.test(contingency_table2[,1])
+  
+  direction <- (contingency_table2[1, 1]/contingency_table2[1, 2]) > (contingency_table2[2, 1]/contingency_table2[2, 2]) # Example condition
+  if (direction) { one_sided_p_value <- chi_squared_test$p.value / 2} else { one_sided_p_value <- 1 - (chi_squared_test$p.value / 2)}
+  
+  chi_squared_results_CT_subclustering <- rbind(chi_squared_results_CT_subclustering, data.frame(
+      Cell_type = cellType_id,
+      X2_pval = round(chi_squared_test$p.value,4),
+      OneSideX2 = round(one_sided_p_value,4)
+    ))
+}
+
+chi_squared_results_CT_subclustering$FDR <- round(p.adjust(chi_squared_results_CT_subclustering$OneSideX2, method = "BH"),4)  
+gt_clonesTh <- gt(chi_squared_results_CT_subclustering)
+gt_clonesTh <- 
+  gt_clonesTh |>
+  tab_header(
+    title = md("**X2 of the clonotype expansion between conditions in each cell type**"),
+  )
+gt_clonesTh
+```
+
+## Difference in the clonal expasion in the subclusterization
+```{r} 
+
+expansionThres <- 2  #Define expansion threshold
+clonesRatio_subC <- data.frame(cellType = character(), Ratio = numeric())
+for (cellType_id in unique(clonalExpansion2$cellType)) {
+  temp <- clonalExpansion2 %>% filter(clonalExpansion2$cellType==cellType_id)
+  expanded <- temp %>% filter(temp$expanded == 'CE')
+  nonexpan <- temp %>% filter(temp$expanded == 'CNE')
+  ratio <- sum(expanded$clones)/sum(nonexpan$clones)
+  newRow <- data.frame(cellType = cellType_id, Ratio = ratio)
+  clonesRatio_subC <- rbind(clonesRatio_subC, newRow)
+}
+
+#Expansion by cluster
+clusterExpansionInfo_subC <- data.frame()
+for (cellType_id in unique(clonalExpansion2$cellType)) {
+  temp <- clonalExpansion2 %>% filter(clonalExpansion2$cellType==cellType_id)
+  
+  temp$NormInCluster <- temp$clones/sum(temp$clones)
+  
+  expaTemp <- temp %>% filter(temp$expanded=="CE")
+  NonExpaTemp <- temp %>% filter(temp$expanded=="CNE")
+  
+  expaC <- sum(expaTemp$NormInCluster)
+  nonexpaC <- sum(NonExpaTemp$NormInCluster)
+  
+  ExpRow <- data.frame(cellType = cellType_id, NormalizedExpansion = expaC, Expansion = "CE")
+  NonExpRow <- data.frame(cellType = cellType_id, NormalizedExpansion = nonexpaC, Expansion = "CNE")
+  
+  ClusterInfo_subC <- rbind(ExpRow,NonExpRow)
+  clusterExpansionInfo_subC <- rbind(clusterExpansionInfo_subC, ClusterInfo_subC)
+}
+
+ExpandedClonesPlot <- ggplot(clusterExpansionInfo_subC, aes(x =factor(cellType, levels = c('Th17','Th2','Thf','Th22','Th1')), y = NormalizedExpansion, fill=Expansion)) + 
+  geom_bar(stat = "identity", position = "stack")+
+  labs(title="Clonotype expansion by T helper subtype",x="Clusters",y="Normalized clone size",color = "black", size = 0.9)+
+  theme_classic()+
+  theme()+
+  scale_fill_manual(values= c('#D23931','#F7AF3C'))
+#ExpandedClonesPlot
+
+#Expansion by condition
+conditionExpansionInfo <- data.frame()
+for (n in c("SSc","CTRL")) {
+  temp <- clonalExpansion2 %>% filter(clonalExpansion2$condition == n)
+  
+  temp$NormInCluster <- temp$clones/sum(temp$clones)
+  
+  expaTemp <- temp %>% filter(temp$expanded=="CE")
+  NonExpaTemp <- temp %>% filter(temp$expanded=="CNE")
+  
+  expaC <- sum(expaTemp$NormInCluster)
+  nonexpaC <- sum(NonExpaTemp$NormInCluster)
+  
+  ExpRow <- data.frame(condition = n, NormalizedExpansion = expaC, Expansion = "CE")
+  NonExpRow <- data.frame(condition = n, NormalizedExpansion = nonexpaC, Expansion = "CNE")
+  
+  ConditionInfo <- rbind(ExpRow, NonExpRow)
+  conditionExpansionInfo <- rbind(conditionExpansionInfo, ConditionInfo)
+}
+
+SScExp <- conditionExpansionInfo %>% filter(conditionExpansionInfo$condition=="SSc")
+SScplot <- ggplot(SScExp, aes(x =condition, y = NormalizedExpansion)) + 
+  geom_bar(aes(fill=Expansion),stat="identity", width=1, color="white")+
+  geom_label(aes(label = (round(NormalizedExpansion*100, 2))), position = position_stack(vjust = 0.55))+
+  theme_classic()+
+  labs(title="SSc")+
+  theme(legend.title=element_blank(),
+        legend.position = "",
+        axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        plot.title = element_text(hjust = 0.45))+
+  coord_polar("y", start=0)+
+  scale_fill_manual(values= c('#D23931','#F7AF3C'))
+
+
+CTRLExp <- conditionExpansionInfo %>% filter(conditionExpansionInfo$condition=="CTRL")
+CTRLplot <- ggplot(CTRLExp, aes(x =condition, y = NormalizedExpansion)) + 
+  geom_bar(aes(fill=Expansion),stat="identity", width=1, color="white")+
+  geom_label(aes(label = (round(NormalizedExpansion*100, 2))), position = position_stack(vjust = 0.55))+
+  theme_classic()+
+  labs(title="CTRL")+
+  theme(legend.title=element_blank(),
+        legend.position ="",
+        axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks = element_blank(),
+        plot.title = element_text(hjust = 0.38))+
+  coord_polar("y", start=0)+
+  scale_fill_manual(values= c('#D23931','#F7AF3C'))
+
+
+pieplots <- wrap_plots(SScplot,CTRLplot,ncol = 1) #SSc vs CTRL
+wrap_plots(pieplots, ExpandedClonesPlot,widths = c(0.75,1))
+SScplot
+ExpandedClonesPlot
+```
+
+## Difference in the clonal expasion cell type subclustering conditions
+```{r}
+one_sided_p_value <- 0
+chi_squared_results_subcluster_condition <- data.frame(CellType=integer(),X2_pval=numeric(),OneSideX2=numeric())
+for (cellType_id in unique(clonalExpansion2$cellType)) {  
+  print(cellType_id)
+  
+  clusterN <- clonalExpansion2[clonalExpansion2$cellType==cellType_id,]
+  clusterN_SSc <- clusterN[clusterN$condition=="SSc",]
+  clusterN_CTRL <- clusterN[clusterN$condition=="CTRL",]
+  
+  ContingC1 <- data.frame(CE=sum(clusterN_SSc$clones[clusterN_SSc$expanded=='CE']), CNE=sum(clusterN_SSc$clones[clusterN_SSc$expanded=='CNE']))
+  ContingC2 <- data.frame(CE=sum(clusterN_CTRL$clones[clusterN_CTRL$expanded=='CE']), CNE=sum(clusterN_CTRL$clones[clusterN_CTRL$expanded=='CNE']))
+  
+  
+  contingency_table2 <- rbind(ContingC1[1,],ContingC2[1,])
+  rownames(contingency_table2) <- c("SSc","CTRL")
+  chi_squared_test <-chisq.test(contingency_table2[,1])
+  
+  direction <- (contingency_table2[1, 1]/contingency_table2[1, 2]) > (contingency_table2[2, 1]/contingency_table2[2, 2]) # Example condition
+  # Calculate one-sided p-value considering the direction
+  if (direction) { one_sided_p_value <- chi_squared_test$p.value / 2} else { one_sided_p_value <- 1 - (chi_squared_test$p.value / 2)} 
+  
+    chi_squared_results_subcluster_condition <- rbind(chi_squared_results_subcluster_condition, data.frame(
+      CellType = cellType_id,
+      X2_pval = round(chi_squared_test$p.value,4),
+      OneSideX2 = round(one_sided_p_value,4)
+  ))
+  
+}
+
+chi_squared_results_subcluster_condition$FDR <- round(p.adjust(chi_squared_results_subcluster_condition$OneSideX2, method = "BH"),4)  
+
+gt_clonesSubClusterCon <- gt(chi_squared_results_subcluster_condition)
+gt_clonesSubClusterCon <- 
+  gt_clonesSubClusterCon |>
+  tab_header(
+    title = md("**X2 of the clonotype expansion between conditions in each cluster**"),
+  )
+gt_clonesSubClusterCon
+```
+
+## Difference in the clonal size
+```{r}
+clonSize <- ggplot(clonesExp, aes(x=factor(cell_type, levels= cellt), y=clone_size, fill=condition)) + 
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  geom_boxplot(width=0.5, alpha = 0.5, position=position_dodge(1))+
+  theme_bw()+
+  theme(axis.text.x = element_text(size=20,face = "bold"),
+        axis.text.y = element_text(size=20),
+        axis.title = element_blank(),
+        title = element_text(size = 15))+
+  scale_fill_manual(values=c('#D8BFD8','#AEC6CF'))+
+  ggtitle("Clones size by cell type")
+clonSize
+```
+
+# Epitope analysis - overview
+```{r}
+adata <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/scRNAseq_SScCD4_adataFnl_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+
+adataEpi <- adata[!(is.na(adata$antigen.species) | adata$antigen.species==""), ]
+#From 81637 cells we end up with 9439 when we remove all the cells with no epitope recognition
+
+continEpi <- table(adataEpi$condition, adataEpi$antigen.species)
+print(continEpi)
+
+EpiList <- unique(adataEpi$antigen.species)
+
+continEpi_table <- as.data.frame(continEpi)
+
+# Create a stacked bar plot
+ggplot(continEpi_table, aes(x = Var1, y = Freq, fill = Var2)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Condition", y = "Count", fill = "Epitope Category") +
+  theme_minimal()
+
+library(reshape2)
+continEpi_heatmap <- melt(continEpi)
+
+# Create a heatmap
+ggplot(continEpi_heatmap, aes(x = Var2, y = Var1, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(x = "Epitope Category", y = "Condition", fill = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+continEpiCT <- table(adataEpi$cell_type, adataEpi$antigen.species)
+print(continEpiCT)
+```
+
+# Epitope analysis
+```{r}
+CellTypesList <- unique(adataEpi$cell_type)
+
+Epi1 <- adataEpi[adataEpi$antigen.species==EpiList[1],] # metadata solo para el primer epitopo
+Epdf <- data.frame(condition=Epi1$condition,sample=Epi1$Sample,cell_type=Epi1$cell_type,cluster=Epi1$R09,clones=Epi1$clonal_expansion) # reducimos solo a las columnas que nos interesa
+
+EpCT1 <- Epdf[Epdf$cell_type==CellTypesList[1],] # solo un tipo celular
+value_counts <- data.frame(t(dplyr::count(EpCT1,condition)))
+colnames(value_counts) <- value_counts[1,]
+value_counts$cellType <- CellTypesList[1]
+value_counts$epitope <- EpiList[1]
+value_counts <- value_counts[-1,]
+print(value_counts)
+```
+
+# Value counts function
+```{r}
+calculate_value_counts <- function(adataEpi, epitope_index, cell_type_index) {
+  # Get unique lists of epitopes and cell types
+  EpiList <- unique(adataEpi$antigen.species) # List of epitopes
+  CellTypesList <- unique(adataEpi$cell_type) # List of cell types
+
+  # Filter metadata for the selected epitope
+  Epi1 <- adataEpi[adataEpi$antigen.species == EpiList[epitope_index],]
+
+  # Create a reduced dataframe with only the relevant columns
+  Epdf <- data.frame(
+    condition = Epi1$condition,
+    sample = Epi1$Sample,
+    cell_type = Epi1$cell_type,
+    cluster = Epi1$R09,
+    clones = Epi1$clonal_expansion
+  )
+
+  # Filter for the selected cell type
+  EpCT1 <- Epdf[Epdf$cell_type == CellTypesList[cell_type_index],]
+
+  # Calculate value counts for the condition
+  value_counts <- data.frame(t(dplyr::count(EpCT1, condition)))
+  
+  # Set column names
+  colnames(value_counts) <- value_counts[1,]
+  value_counts <- value_counts[-1,]
+
+  # Add cell type and epitope information
+  value_counts$cellType <- CellTypesList[cell_type_index]
+  value_counts$epitope <- EpiList[epitope_index]
+
+  return(value_counts)
+}
+```
+
+```{r}
+result_list <- vector("list", length(CellTypesList) * length(EpiList))
+
+# Index to keep track of list position
+index <- 1
+
+# Loop through cell types and epitopes
+for (n in seq_along(CellTypesList)) {
+  for (m in seq_along(EpiList)) {
+    result_list[[index]] <- calculate_value_counts(adataEpi, m, n)
+    index <- index + 1
+  }
+}
+
+# Combine all results into a single data frame
+filtered_results <- Filter(function(x) length(x) > 3, result_list)
+resultEpi <- do.call(rbind, filtered_results)
+
+resultEpi$CTRL <- as.numeric(resultEpi$CTRL)
+resultEpi$SSc <- as.numeric(resultEpi$SSc)
+resultEpi$pctCTRL <- as.numeric(round(resultEpi$CTRL/sum(resultEpi$CTRL),3))
+resultEpi$pctSSc <- as.numeric(round(resultEpi$SSc/sum(resultEpi$SSc),3))
+
+resSum <- data.frame(CTRL = sum(resultEpi$CTRL), SSc = sum(resultEpi$SSc), cellType = 'all', epitope = 'all')
+
+filtered_results2 <- Filter(function(x) length(x) == 3, result_list)
+resultEpi2 <- do.call(rbind, filtered_results2)
+
+```
+
+```{r}
+calculate_value_counts_2 <- function(adataEpi, epitope_index) {
+  # Get unique lists of epitopes and cell types
+  EpiList <- unique(adataEpi$antigen.species) # List of epitopes
+  #CellTypesList <- unique(adataEpi$cell_type) # List of cell types
+
+  # Filter metadata for the selected epitope
+  Epi1 <- adataEpi[adataEpi$antigen.species == EpiList[epitope_index],]
+
+  # Create a reduced dataframe with only the relevant columns
+  Epdf <- data.frame(
+    condition = Epi1$condition,
+    sample = Epi1$Sample,
+    cell_type = Epi1$cell_type,
+    cluster = Epi1$R09,
+    clones = Epi1$clonal_expansion
+  )
+
+  # Filter for the selected cell type
+  #EpCT1 <- Epdf[Epdf$cell_type == CellTypesList[cell_type_index],]
+
+  # Calculate value counts for the condition
+  value_counts <- data.frame(t(dplyr::count(Epdf, condition)))
+  
+  # Set column names
+  colnames(value_counts) <- value_counts[1,]
+  value_counts <- value_counts[-1,]
+
+  # Add cell type and epitope information
+  #value_counts$cellType <- CellTypesList[cell_type_index]
+  value_counts$epitope <- EpiList[epitope_index]
+
+  return(value_counts)
+}
+```
+
+```{r}
+result_list <- vector("list", length(EpiList))
+
+# Index to keep track of list position
+index <- 1
+
+# Loop through cell types and epitopes
+for (m in seq_along(EpiList)) {
+    result_list[[index]] <- calculate_value_counts_2(adataEpi, m)
+    index <- index + 1
+}
+
+filtered_results <- Filter(function(x) length(x) > 2, result_list)
+resultEpi <- do.call(rbind, filtered_results)
+
+resultEpi$CTRL <- as.numeric(resultEpi$CTRL)
+resultEpi$SSc <- as.numeric(resultEpi$SSc)
+resultEpi$pctCTRL <- as.numeric(round(resultEpi$CTRL/sum(resultEpi$CTRL),3))
+resultEpi$pctSSc <- as.numeric(round(resultEpi$SSc/sum(resultEpi$SSc),3))
+
+resultEpi2 <- resultEpi %>%
+  mutate(
+    pctCTRL = CTRL / (CTRL + SSc),
+    pctSSc = SSc / (CTRL + SSc)
+  )
+
+df <- resultEpi2 %>%
+  pivot_longer(
+    cols = c(CTRL, SSc),
+    names_to = "condition",
+    values_to = "value"
+  ) %>%
+  pivot_longer(
+    cols = c(pctCTRL, pctSSc),
+    names_to = "pct_condition",
+    values_to = "pct_value"
+  ) %>%
+  dplyr::filter(stringr::str_replace(pct_condition, "pct", "") == condition) %>%
+  select(-pct_condition)
+
+```
+
+```{r}
+epiPlot <- ggplot(df, aes(fill= condition, x=epitope, y=pct_value)) + 
+  geom_bar(stat = "identity", width=1, color='black')+
+  theme_minimal()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.key = element_rect(fill = "lightblue", color = NA),
+        legend.key.size = unit(1.5, "cm"),
+        legend.key.width = unit(0.5,"cm"), 
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_blank(),
+        plot.margin = unit(c(0,3,0,3), "lines"))+
+  scale_fill_manual(values=c('#D8BFD8','#AEC6CF'))+
+  coord_flip()
+
+print(epiPlot)
+```
+# Final plots
+## Loading the Seurat object
+```{r}
+SScCD4 <- SeuratDisk::LoadH5Seurat("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/scRNAseq_SSc_CD4_allMerge_PCs_it92_2_5_CT_TCR.h5seurat",assays = "RNA") #Seurat object
+
+Idents(SScCD4) <- SScCD4$R09
+SScCD4 <- RenameIdents(object = SScCD4,'0'= 'Tn','1'= 'Tn','2'= 'Tn','3'= 'Tcm','4'= 'Tn','5'= 'Tcm','6'='Tcm','7'= 'Tem','9'='Tcm','10'='Treg','8'='Tn','11'='Temra')
+SScCD4[["cell_type"]] <- Idents(object = SScCD4)
+
+Idents(SScCD4) <- SScCD4$R09
+
+```
+
+## Cluster compo analysis
+```{r}
+#CD4_R09counts <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/counts/scRNAseq_SScCD4_Batch_R09_count_HGV15PC30_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+CD4_R09 <- CD4_R09counts
+CD4_R09[is.na(CD4_R09)] <- 0
+
+CD4_R09[13,] <- colSums(CD4_R09)
+
+#Creamos la misma tabla pero con las proporciones
+CD4_R09_trans <-as.data.frame(mapply('/',CD4_R09[c(1:12),],CD4_R09[13,]))
+CD4_R09_trans$X <- CD4_R09$X[c(1:12)]
+
+#Las columnas de la 5 a la 12 son los CTRLes y de la 13 a la 20 los casos, hacemos la media de ellos para comprobar posteriormente si los resultados del t-test son correctos
+CD4_R09_trans$MeanCTRL <- rowMeans(CD4_R09_trans[,c(5:12)])
+CD4_R09_trans$MeanSScs <- rowMeans(CD4_R09_trans[,c(13:20)])
+
+#Para hacer los box plot hay que hacer varias transformaciones de las tablas para ajustarlo a la funcion que necesita 3 columnas: la aportacion de cada individuo al cluster, el cluster al que pertenece y su condicion (caso o CTRL)
+
+leidenCtrl <- data.frame(Cluster=CD4_R09_trans$X,CD4_R09_trans[,c(5:12)]) #tabla con solo la info que necesitamos
+leidenCtrl <- as.data.frame(t(leidenCtrl))
+leidenCtrl <- tibble::rownames_to_column(leidenCtrl, "sample")
+
+leidenCtrl2 <- data.frame()
+p <- 0
+k <- 1
+for(n in 2:ncol(leidenCtrl)){
+  p <- p+8
+  leidenCtrl2[c(k:p),1] <- leidenCtrl[c(2:9),1] #Sample name
+  leidenCtrl2[c(k:p),2] <- as.character(round(leidenCtrl[1,n],1)) #cluster
+  leidenCtrl2[c(k:p),3] <- leidenCtrl[c(2:9),n] #aportacion
+  leidenCtrl2[c(k:p),4] <- "CTRL" #condition
+  k <- k+8
+}
+
+leidenCs <- data.frame(Cluster=CD4_R09_trans$X,CD4_R09_trans[,c(13:20)])
+leidenCs <- as.data.frame(t(leidenCs))
+leidenCs <- tibble::rownames_to_column(leidenCs, "sample")
+leidenCs2 <- data.frame()
+p <- 0
+k <- 1
+for(n in 2:ncol(leidenCs)){
+  p <- p+8
+  leidenCs2[c(k:p),1] <- leidenCs[c(2:9),1] #Sample name
+  leidenCs2[c(k:p),2] <- as.character(round(leidenCs[1,n],1)) #cluster
+  leidenCs2[c(k:p),3] <- leidenCs[c(2:9),n] #aportacion
+  leidenCs2[c(k:p),4] <- "SSc" #condition
+  k <- k+8
+}
+
+leiden <- rbind(leidenCtrl2,leidenCs2) #Unimos las tablas de los casos y CTRLes
+
+leiden$Contribution2 <- round(leiden$V3*100,2)
+leidenCs2$Contribution2 <- round(leidenCs2$V3*100,2)
+leidenCtrl2$Contribution2 <- round(leidenCtrl2$V3*100,2)
+
+colnames(leiden) <- c("Sample", "Cluster","Contribution","Condition","ContributionPercent") #Renombramos
+colnames(leidenCs2) <- c("Sample", "Cluster","Contribution","Condition","ContributionPercent") #Renombramos
+colnames(leidenCtrl2) <- c("Sample", "Cluster","Contribution","Condition","ContributionPercent") #Renombramos
+
+Fraction_SScs <- data.frame(Cluster=CD4_R09_trans$X,Cells=CD4_R09_trans$SSc,Condition='SSc')
+Fraction_SScs$Percent <- round(Fraction_SScs$Cells*100,2)
+Fraction_ctrl <- data.frame(Cluster=CD4_R09_trans$X,Cells=CD4_R09_trans$CTRL,Condition='CTRL')
+Fraction_ctrl$Percent <- round(Fraction_ctrl$Cells*100,2)
+Fraction <- rbind(Fraction_SScs,Fraction_ctrl)
+
+```
+
+## Cluster compo plots
+```{r}
+q <- ggplot(Fraction, aes(fill=factor(Cluster, levels = c("11","10","9","8","7","6","5","4","3","2","1","0")), x= factor(Condition,levels = c("CTRL","SSc")), y=Percent)) + 
+  geom_bar(stat = "identity", color='black')+
+  labs(fill="Cluster",x=NULL,y="Fraction of cells")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position="",
+        legend.key = element_rect(fill = "lightblue", color = NA),
+        legend.key.size = unit(1.5, "cm"),
+        legend.key.width = unit(0.5,"cm"), 
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_text(size=18,face="bold"),
+        plot.margin = unit(c(0,3,0,3), "lines"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=rev(clusterCols),
+                    labels = c("11","10","9","8","7","6","5","4","3","2","1","0"))+
+  scale_x_discrete()
+q
+
+q1 <- ggplot(leiden, aes(fill=factor(Cluster, levels = c("11","10","9","8","7","6","5","4","3","2","1","0")), x=factor(Sample,levels = SampleList), y=ContributionPercent)) + 
+  geom_bar(stat = "identity", color='black')+
+  labs(fill="Cluster",x=NULL,y="Fraction of cells")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position="right",
+        #legend.key = element_rect(fill = "lightblue", color = NA),
+        legend.key.size = unit(0.5, "cm"),
+        legend.key.width = unit(0.5,"cm"),
+        legend.title = element_text(size=21),
+        legend.text = element_text(size=21),
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_blank())+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=rev(clusterCols),
+                    labels = c("11","10","9","8","7","6","5","4","3","2","1","0"))+
+  scale_x_discrete()
+q1
+
+q2 <- ggplot(leiden, aes(x=factor(Condition, levels =c("CTRL","SSc") ), y=Contribution, fill=Condition)) + 
+  geom_violin(alpha=0.5)+
+  geom_boxplot(width=0.3)+
+  geom_dotplot(binaxis='y', stackdir='center')+
+  facet_wrap(~factor(Cluster, levels = c("0","1","2","3","4","5","6","7","8","9","10","11")),scales = "free",strip.position = "left")+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=20),
+        axis.text.y = element_text(size=20),
+        axis.title = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank())+
+  scale_x_discrete()+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c("#228B22","#9932CC"))
+q2
+
+ggarrange(q,q1, widths = c(1,2))
+```
+##### Clusters significativos  
+```{r}
+
+##### Clusters significativos  ####
+
+#Cluster 4 - Significativo FDR <0.1
+leiden4 <- leiden %>% filter(leiden$Cluster=="4") #Cluster0
+
+leiden41 <- rbind(leiden4,leiden4[c(9:16),])
+subtype <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","lcSSc","lcSSc","lcSSc","dcSSc","lcSSc","lcSSc","dcSSc","lcSSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc")
+leiden41$ClinicalSub <- subtype
+
+
+Cluster4 <- ggplot(leiden41, aes(x=factor(ClinicalSub, levels=c("CTRL","SSc","lcSSc","dcSSc")), y=Contribution, fill=ClinicalSub)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#AEC6CF','#FFFACD','#C3E5C3'))+
+  ggtitle("Cluster 4 YPEL5_EIF1_SARAF")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc"),c("CTRL","lcSSc"),c("CTRL","dcSSc"),c("lcSSc","dcSSc")) , label = "p.signif", method = "wilcox.test")
+
+#
+#filenameC4PDF <- "Cluster4CompositionVln.pdf"
+#filenameC4JPG <- "Cluster4CompositionVln.jpg"
+#ggsave(filenameC4PDF,path = pathTO,dpi = 300,device = 'pdf')
+#ggsave(filenameC4JPG,path = pathTO,dpi = 300,device = 'pdf')
+
+#Cluster 3 - Sugestivo pval < 0.05
+leiden3 <- leiden %>% filter(leiden$Cluster=="3") #Cluster0
+
+leiden31 <- rbind(leiden3,leiden3[c(9:16),])
+subtype <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","lcSSc","lcSSc","lcSSc","dcSSc","lcSSc","lcSSc","dcSSc","lcSSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc")
+leiden31$ClinicalSub <- subtype
+
+Cluster3 <- ggplot(leiden31, aes(x=factor(ClinicalSub, levels=c("CTRL","SSc","lcSSc","dcSSc")), y=Contribution, fill=ClinicalSub)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#AEC6CF','#FFFACD','#C3E5C3'))+
+  ggtitle("Cluster 3 S100A4_KLRB1_LTB")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc"),c("CTRL","lcSSc"),c("CTRL","dcSSc"),c("lcSSc","dcSSc")) , label = "p.signif", method = "wilcox.test")
+
+#
+#filenameC3PDF <- "Cluster3CompositionVln.pdf"
+#filenameC3JPG <- "Cluster3CompositionVln.jpg"
+#ggsave(filenameC3PDF,path = pathTO,dpi = 300,device = 'pdf')
+#ggsave(filenameC3JPG,path = pathTO,dpi = 300,device = 'pdf')
+
+#Cluster 9 - Sugestivo pval < 0.05
+leiden9 <- leiden %>% filter(leiden$Cluster=="9") #Cluster0
+
+leiden91 <- rbind(leiden9,leiden9[c(9:16),])
+subtype <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","lcSSc","lcSSc","lcSSc","dcSSc","lcSSc","lcSSc","dcSSc","lcSSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc")
+leiden91$ClinicalSub <- subtype
+
+Cluster9 <- ggplot(leiden91, aes(x=factor(ClinicalSub, levels=c("CTRL","SSc","lcSSc","dcSSc")), y=Contribution, fill=ClinicalSub)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#AEC6CF','#FFFACD','#C3E5C3'))+
+  ggtitle("Cluster 9 S100A4_LMNA_S100A10")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc"),c("CTRL","lcSSc"),c("CTRL","dcSSc"),c("lcSSc","dcSSc")) , label = "p.signif", method = "wilcox.test")
+
+#
+#filenameC9PDF <- "Cluster9CompositionVln.pdf"
+#filenameC9JPG <- "Cluster9CompositionVln.jpg"
+#ggsave(filenameC9PDF,path = pathTO,dpi = 300,device = 'pdf')
+#ggsave(filenameC9JPG,path = pathTO,dpi = 300,device = 'pdf')
+Cluster3
+Cluster4
+Cluster9
+```
+
+##### Clusters significativos - by condition
+```{r}
+
+##### Clusters significativos  ####
+
+#Cluster 4 - Significativo FDR <0.1
+leiden4 <- leiden %>% filter(leiden$Cluster=="4") #Cluster0
+
+leiden41 <- rbind(leiden4,leiden4[c(9:16),])
+subtype <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","lcSSc","lcSSc","lcSSc","dcSSc","lcSSc","lcSSc","dcSSc","lcSSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc")
+leiden41$ClinicalSub <- subtype
+
+
+Cluster4 <- ggplot(leiden4, aes(x=factor(Condition, levels=c("CTRL","SSc")), y=Contribution, fill=Condition)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#C3E5C3'))+
+  ggtitle("Cluster 4 YPEL5_EIF1_SARAF")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc")) , label = "p.signif", method = "wilcox.test")
+
+#
+#filenameC4PDF <- "Cluster4CompositionVln.pdf"
+#filenameC4JPG <- "Cluster4CompositionVln.jpg"
+#ggsave(filenameC4PDF,path = pathTO,dpi = 300,device = 'pdf')
+#ggsave(filenameC4JPG,path = pathTO,dpi = 300,device = 'pdf')
+
+#Cluster 3 - Sugestivo pval < 0.05
+leiden3 <- leiden %>% filter(leiden$Cluster=="3") #Cluster0
+
+leiden31 <- rbind(leiden3,leiden3[c(9:16),])
+subtype <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","lcSSc","lcSSc","lcSSc","dcSSc","lcSSc","lcSSc","dcSSc","lcSSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc")
+leiden31$ClinicalSub <- subtype
+
+Cluster3 <- ggplot(leiden3, aes(x=factor(Condition, levels=c("CTRL","SSc")), y=Contribution, fill=Condition)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#C3E5C3'))+
+  ggtitle("Cluster 3 S100A4_KLRB1_LTB")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc")) , label = "p.signif", method = "wilcox.test")
+
+#
+#filenameC3PDF <- "Cluster3CompositionVln.pdf"
+#filenameC3JPG <- "Cluster3CompositionVln.jpg"
+#ggsave(filenameC3PDF,path = pathTO,dpi = 300,device = 'pdf')
+#ggsave(filenameC3JPG,path = pathTO,dpi = 300,device = 'pdf')
+
+#Cluster 9 - Sugestivo pval < 0.05
+leiden9 <- leiden %>% filter(leiden$Cluster=="9") #Cluster0
+
+leiden91 <- rbind(leiden9,leiden9[c(9:16),])
+subtype <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","lcSSc","lcSSc","lcSSc","dcSSc","lcSSc","lcSSc","dcSSc","lcSSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc")
+leiden91$ClinicalSub <- subtype
+
+Cluster9 <- ggplot(leiden9, aes(x=factor(Condition, levels=c("CTRL","SSc")), y=Contribution, fill=Condition)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#C3E5C3'))+
+  ggtitle("Cluster 9 S100A4_LMNA_S100A10")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc")) , label = "p.signif", method = "wilcox.test")
+
+#
+#filenameC9PDF <- "Cluster9CompositionVln.pdf"
+#filenameC9JPG <- "Cluster9CompositionVln.jpg"
+#ggsave(filenameC9PDF,path = pathTO,dpi = 300,device = 'pdf')
+#ggsave(filenameC9JPG,path = pathTO,dpi = 300,device = 'pdf')
+Cluster3
+Cluster4
+Cluster9
+```
+
+## Cell type compo analysis
+```{r}
+CD4_CT <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/counts/scRNAseq_SScCD4_Batch_CorollaCellType_count_HGV15PC20_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+subtype <- data.frame(sample = c('SSc2','SSc3','SSc4','SSc5','SSc7','SSc10','SSc11','SSc12'), SScSubtype=c('lcSSc','lcSSc','lcSSc','dcSSc','lcSSc','lcSSc','dcSSc','lcSSc'))
+
+cellt <-c("Tn","Tcm","Tem","Treg","Temra")
+colorCT <-  c("#a9dfbb", "#6cd0c4" ,"#176fb7","#fc6daf","#ff0000")
+
+clinSub <- c("CTRL","SSc","lcSSc","dcSSc")
+colorSub <- c("#F2B2D7","#FFD700","#B2D7F2")
+
+newnames <- c("CTRL1","CTRL3","CTRL5","CTRL6","CTRL10","CTRL11","CTRL12","CTRL13","SSc2","SSc3","SSc4","SSc5","SSc7","SSc10","SSc11","SSc12")
+
+#colnames(CD4_CT) <- c("X","raw","case","control","CTRL1","CTRL3","CTRL5","CTRL6","CTRL10","CTRL11","CTRL12","CTRL13","SSc3","SSc4","SSc5","SSc7","SSc8","SSc10","SSc11","SSc12")
+
+rownames(CD4_CT) <- CD4_CT$X
+
+CD4_CT$dcSSc <- mapply('+',CD4_CT$SSc5,CD4_CT$SSc11)
+CD4_CT$lcSSc <- mapply('-',CD4_CT$SSc,CD4_CT$dcSSc)
+
+CD4_CT_trans <- CD4_CT[,c(2:22)]
+CD4_CT_trans[6,] <- colSums(CD4_CT_trans[c(1:5),])
+
+
+#Creamos la misma tabla pero con las proporciones
+CD4_CT_trans_2 <-as.data.frame(mapply('/',CD4_CT_trans[c(1:5),],CD4_CT_trans[6,]))
+
+CT_Cases <- data.frame(CD4_CT_trans_2[,c(12:19)])
+CT_Cases<- as.data.frame(t(CT_Cases))
+CT_Cases <- tibble::rownames_to_column(CT_Cases, "Sample")
+
+CT_Cases$Subtype <- subtype$SScSubtype
+
+CT_Control <- data.frame(CD4_CT_trans_2[,c(4:11)])
+CT_Control<- as.data.frame(t(CT_Control))
+CT_Control <- tibble::rownames_to_column(CT_Control, "Sample")
+CT_Control[9,] <- c("Sample","Tn","Tcm","Tem","Treg","Temra")
+
+#Creamos la matrix como la quiere la funcion para casos y controles
+CT_Control2 <- data.frame()
+p <- 0
+k <- 1
+for(n in 2:ncol(CT_Control)){
+  p <- p+8
+  CT_Control2[c(k:p),1] <- CT_Control[c(1:8),1] #Sample name
+  CT_Control2[c(k:p),2] <- CT_Control[9,n] #Cell_type
+  CT_Control2[c(k:p),3] <- as.numeric(CT_Control[c(1:8),n]) #aportacion
+  CT_Control2[c(k:p),4] <- "CTRL" #condition
+  k <- k+8
+}
+CT_Control2[,5] <- "CTRL"
+
+
+CT_Cases[9,] <- c("Sample","Tn","Tcm","Tem","Treg","Temra","Subtype")
+CT_Cases2 <- data.frame()
+p <- 0
+k <- 1
+l <- ncol(CT_Cases)-1
+for(n in 2:l){
+  p <- p+8
+  CT_Cases2[c(k:p),1] <- CT_Cases[c(1:8),1] #Sample name
+  CT_Cases2[c(k:p),2] <- CT_Cases[9,n] #Cell_type
+  CT_Cases2[c(k:p),3] <- as.numeric(CT_Cases[c(1:8),n]) #aportacion
+  CT_Cases2[c(k:p),4] <- "SSc" #condition
+  CT_Cases2[c(k:p),5] <- CT_Cases[c(1:8),7] #Sample subtype
+  k <- k+8
+}
+
+
+CellTypes <- rbind(CT_Control2,CT_Cases2) #Unimos las tablas de los casos y controles
+colnames(CellTypes) <- c("Sample","Cell_Type","Contribution","Condition","Subtype") #Renombramos
+
+color_var2 <- rev(colorCT)
+
+
+CellFraction_cases <- data.frame(Cell_type=cellt,Cells=CD4_CT_trans_2$SSc,Condition='SSc')
+CellFraction_cases$Percent <- round(CellFraction_cases$Cells*100,2)
+CellFraction_ctrl <- data.frame(Cell_type=cellt,Cells=CD4_CT_trans_2$CTRL,Condition='CTRL')
+CellFraction_ctrl$Percent <- round(CellFraction_ctrl$Cells*100,2)
+
+
+CellFraction <- rbind(CellFraction_cases,CellFraction_ctrl)
+#CellFraction$colorCell <- c("#e31a1c","#ec7014","#238443","#2c7fb8","#e31a1c","#ec7014","#238443","#2c7fb8")
+
+CellTypes$ContributionPercent <- round(CellTypes$Contribution*100,2)
+
+CellFraction_lcSSc <- data.frame(Cell_type=cellt,Cells=CD4_CT_trans_2$lcSSc,Condition='lcSSc')
+CellFraction_lcSSc$Percent <- round(CellFraction_lcSSc$Cells*100,2)
+
+CellFraction_dcSSc <- data.frame(Cell_type=cellt,Cells=CD4_CT_trans_2$dcSSc,Condition='dcSSc')
+CellFraction_dcSSc$Percent <- round(CellFraction_dcSSc$Cells*100,2)
+
+CellFraction2 <- rbind(CellFraction_cases,CellFraction_ctrl,CellFraction_lcSSc,CellFraction_dcSSc)
+
+```
+
+### Cell type compo plots
+```{r}
+qCT1 <- ggplot(CellFraction, aes(fill=factor(Cell_type, levels =rev(cellt)), x=Condition, y=Percent)) + 
+  geom_bar(stat = "identity", color='black')+
+  labs(fill= "Cell type" , x=NULL,y="Fraction of cells")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position="",
+        legend.key = element_rect(fill = "lightblue", color = NA),
+        legend.key.size = unit(1.5, "cm"),
+        legend.key.width = unit(0.5,"cm"), 
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_text(size=18,face="bold"),
+        plot.margin = unit(c(0,3,0,3), "lines"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=rev(colorCT),
+                    labels = rev(cellt))
+
+qCT1
+
+qCT2 <- ggplot(CellTypes, aes(fill=factor(Cell_Type, levels =rev(cellt)), x=factor(Sample,levels =newnames), y=ContributionPercent)) +   geom_bar(stat = "identity", color='black')+
+  labs(fill="Cell_Type",x=NULL,y="Fraction of cells")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        #legend.key = element_rect(fill = "lightblue", color = NA),
+        legend.key.size = unit(0.5, "cm"),
+        legend.key.width = unit(0.5,"cm"), 
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=14,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_blank())+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=rev(colorCT),
+                    labels = rev(cellt))
+qCT2
+ggarrange(qCT1,qCT2, widths = c(1,2)) #SSc vs CTRL
+
+
+qCT4 <- ggplot(CellTypes, aes(x=factor(Subtype, levels = rev(clinSub)), y=Contribution,fill=Subtype)) +
+  facet_wrap(~factor(Cell_Type,levels=cellt), scales="free",strip.position = "left",nrow = 1)+
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center')+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#AEC6CF','#FFFACD','#C3E5C3'))
+qCT4
+
+filenameCTPDFCS <- "CellTypeSoskicCompositionClinicalSubtype.pdf"
+filenameCTJPGCS <- "CellTypeSoskicCompositionClinicalSubtype.jpg"
+pathTO <- "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication/"
+
+ggsave(filenameCTPDFCS,qCT4 ,path = pathTO,dpi = 300,device = 'pdf')
+ggsave(filenameCTJPGCS,qCT4 ,path = pathTO,dpi = 300,device = 'jpg')
+```
+
+### UMAPs
+```{r}
+library(cowplot)
+
+d1 <- DimPlot(object = SScCD4, pt.size = 1,reduction = 'umap',group.by = "R09", cols = clusterCols)
+d1
+d2 <- DimPlot(object = SScCD4, pt.size = 1,reduction = 'umap',group.by = "cell_type", cols = colorCT)
+patchwork::wrap_plots(d1, d2)
+
+
+```
+
+## Plots
+```{r}
+Idents(SScCD4) <- SScCD4$R09
+
+umap_data <- as.data.frame(Embeddings(SScCD4, "umap"))
+umap_data$cluster <- Idents(SScCD4)
+
+# Calculate the centroids of each cluster
+centroids <- umap_data %>%
+  group_by(cluster) %>%
+  summarize(UMAP_1 = mean(umap_1), UMAP_2 = mean(umap_2))
+
+# Create the UMAP plot with cluster labels
+umap_plot <- ggplot(umap_data, aes(x = umap_1, y = umap_2, color = cluster)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = clusterCols) +
+  theme_bw() + # Clean theme for publication
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15), # Centered and bold title
+    axis.title = element_text(face = "bold", size = 12), # Bold axis titles
+    axis.text = element_blank(), 
+    legend.title = element_text(face = "bold", size = 10), # Bold legend title
+    legend.text = element_text(size = 14), # Larger legend text
+    legend.position = "bottom",
+    panel.border = element_rect(color = "black", size = 1), # Black border around the plot
+    panel.grid.major = element_blank(), # Remove major grid lines
+    panel.grid.minor = element_blank(), # Remove minor grid lines
+    axis.ticks = element_blank(), 
+    strip.background = element_blank(), # Remove strip background
+    strip.text = element_text(face = "bold", size = 14) # Bold facet labels if applicable
+  ) +
+  guides(color = guide_legend(
+    title = "Cluster", 
+    nrow = 2, 
+    override.aes = list(shape = 22, size = 3,fill = clusterCols)  # Change to squares with size
+  )) + 
+  ggtitle("UMAP by Cluster") + # Add a title to the plot
+  geom_text(data = centroids, aes(x = UMAP_1, y = UMAP_2, label = cluster), color = "black", size = 5, fontface = "bold")
+
+
+Idents(SScCD4) <- SScCD4$cell_type
+
+umap_ct <- as.data.frame(Embeddings(SScCD4, "umap"))
+umap_ct$celltype <- Idents(SScCD4)
+
+# Calculate the centroids of each cluster
+centroids <- umap_ct %>%
+  group_by(celltype) %>%
+  summarize(UMAP_1 = mean(umap_1), UMAP_2 = mean(umap_2))
+
+# Create the UMAP plot with cluster labels
+umap_ct_plot <- ggplot(umap_ct, aes(x = umap_1, y = umap_2, color = celltype)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = colorCT) +
+  theme_bw() + # Clean theme for publication
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15), # Centered and bold title
+    axis.title = element_text(face = "bold", size = 12), # Bold axis titles
+    axis.text = element_blank(), 
+    legend.title = element_text(face = "bold", size = 10), # Bold legend title
+    legend.text = element_text(size = 14), # Larger legend text
+    legend.position = "bottom",
+    panel.border = element_rect(color = "black", size = 1), # Black border around the plot
+    panel.grid.major = element_blank(), # Remove major grid lines
+    panel.grid.minor = element_blank(), # Remove minor grid lines
+    axis.ticks = element_blank(), 
+    strip.background = element_blank(), # Remove strip background
+    strip.text = element_text(face = "bold", size = 14) # Bold facet labels if applicable
+  ) +
+  guides(color = guide_legend(
+    title = "Annotation", 
+    nrow = 2, 
+    override.aes = list(shape = 22, size = 3,fill = colorCT)  # Change to squares with size
+  )) + 
+  ggtitle("UMAP by annotation") + # Add a title to the plot
+  geom_text(data = centroids, aes(x = UMAP_1, y = UMAP_2, label = celltype), color = "black", size = 5, fontface = "bold")
+
+```
+
+## Plots. SIN LEYENDA
+```{r}
+Idents(SScCD4) <- SScCD4$R09
+
+umap_data <- as.data.frame(Embeddings(SScCD4, "umap"))
+umap_data$cluster <- Idents(SScCD4)
+
+# Calculate the centroids of each cluster
+centroids <- umap_data %>%
+  group_by(cluster) %>%
+  summarize(UMAP_1 = mean(umap_1), UMAP_2 = mean(umap_2))
+
+# Create the UMAP plot with cluster labels
+umap_plot <- ggplot(umap_data, aes(x = umap_1, y = umap_2, color = cluster)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = clusterCols) +
+  theme_bw() + # Clean theme for publication
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15), # Centered and bold title
+    axis.title = element_text(face = "bold", size = 12), # Bold axis titles
+    axis.text = element_blank(), 
+    legend.text = element_blank(), # Larger legend text
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1), # Black border around the plot
+    panel.grid.major = element_blank(), # Remove major grid lines
+    panel.grid.minor = element_blank(), # Remove minor grid lines
+    axis.ticks = element_blank(), 
+    strip.background = element_blank(), # Remove strip background
+    strip.text = element_text(face = "bold", size = 14) # Bold facet labels if applicable
+  ) +
+  ggtitle("UMAP by Cluster") + # Add a title to the plot
+  geom_text(data = centroids, aes(x = UMAP_1, y = UMAP_2, label = cluster), color = "black", size = 5, fontface = "bold")
+
+
+Idents(SScCD4) <- SScCD4$cell_type
+
+umap_ct <- as.data.frame(Embeddings(SScCD4, "umap"))
+umap_ct$celltype <- Idents(SScCD4)
+
+# Calculate the centroids of each cluster
+centroids <- umap_ct %>%
+  group_by(celltype) %>%
+  summarize(UMAP_1 = mean(umap_1), UMAP_2 = mean(umap_2))
+
+# Create the UMAP plot with cluster labels
+umap_ct_plot <- ggplot(umap_ct, aes(x = umap_1, y = umap_2, color = celltype)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = colorCT) +
+  theme_bw() + # Clean theme for publication
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15), # Centered and bold title
+    axis.title = element_text(face = "bold", size = 12), # Bold axis titles
+    axis.text = element_blank(), 
+    legend.text = element_blank(), # Larger legend text
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1), # Black border around the plot
+    panel.grid.major = element_blank(), # Remove major grid lines
+    panel.grid.minor = element_blank(), # Remove minor grid lines
+    axis.ticks = element_blank(), 
+    strip.background = element_blank(), # Remove strip background
+    strip.text = element_text(face = "bold", size = 14) # Bold facet labels if applicable
+  ) +
+  ggtitle("UMAP by annotation") + # Add a title to the plot
+  geom_text(data = centroids, aes(x = UMAP_1, y = UMAP_2, label = celltype), color = "black", size = 5, fontface = "bold")
+
+```
+
+### Combine plot
+```{r}
+#library('cowplot')
+# Combine the plots
+combined_plot <- plot_grid(
+  umap_plot, 
+  umap_ct_plot, 
+  ncol = 2,        # Arrange in 1 column (vertically), use nrow = 1 for horizontal arrangement
+  labels = c("A", "B"),  # Optional: Label each plot
+  label_size = 16  # Optional: Size of the labels
+)
+
+# Display the combined plot
+print(combined_plot)
+
+```
+### legends
+```{r}
+clusterNum <- 0:11
+
+data <- data.frame(
+  x = clusterNum %% 6 + 1,  # x positions (arrange in 4 columns)
+  y = 2 - clusterNum %/% 6,  # y positions (arrange in 3 rows)
+  color = clusterCols,
+  number = as.character(clusterNum)
+)
+
+# Create the plot
+legendClusters <- ggplot(data, aes(x = x, y = y, fill = color)) +
+  geom_tile(width = 0.9, height = 0.9, color = "black") +  # Draw squares with black edges
+  geom_text(aes(label = number), vjust = -1.5, color = "black", size = 5, fontface = "bold") +  # Add numbers above the squares
+  scale_fill_identity() +  # Use the provided colors directly
+  coord_fixed() +  # Maintain square aspect ratio
+  scale_x_continuous(expand = c(0, 0), breaks = NULL) +  # Remove x-axis labels and expand
+  scale_y_continuous(expand = c(0, 0), breaks = NULL) +  # Remove y-axis labels and expand
+  theme_void() +  # Remove axes, grid, and background
+  theme(legend.position = "none")  # Remove legend
+legendClusters
+
+```
+
+### Legends
+```{r Legends}
+
+data <- data.frame(
+  x = clusterNum %% 12 + 1,  # x positions (arrange in 4 columns)
+  y = 12 - clusterNum %/% 12,  # y positions (arrange in 3 rows)
+  color = clusterCols,
+  number = as.character(clusterNum)
+)
+
+# Create the plot
+legendClusters <- ggplot(data, aes(x = x, y = y, fill = color)) +
+  geom_tile(width = 0.9, height = 0.9, color = "black") +  # Draw squares with black edges
+  scale_fill_identity() +  # Use the provided colors directly
+  coord_fixed() +  # Maintain square aspect ratio
+  scale_x_continuous(expand = c(0, 0), breaks = NULL) +  # Remove x-axis labels and expand
+  scale_y_continuous(expand = c(0, 0), breaks = NULL) +  # Remove y-axis labels and expand
+  theme_void() +  # Remove axes, grid, and background
+  theme(legend.position = "none")  # Remove legend
+
+legendClusters_numbers <- ggplot(data, aes(x = x, y = y, fill = color)) +
+  geom_tile(width = 0.9, height = 0.9, color = "white", fill = NA) +  # Set fill to NA for transparency
+  geom_text(aes(label = number), vjust = 0.5, color = "black", size = 15, fontface = "bold") +
+  scale_fill_identity() +
+  coord_fixed() +
+  scale_x_continuous(expand = c(0, 0), breaks = NULL) +
+  scale_y_continuous(expand = c(0, 0), breaks = NULL) +
+  theme_void() +
+  theme(legend.position = "none")
+
+# Combine the plots
+combined_legend <- plot_grid(
+  legendClusters_numbers, 
+  legendClusters, 
+  ncol = 1
+)
+
+# Display the combined plot
+print(combined_legend)
+
+```
+
+## Plotting all the plots of Figure 2.
+```{r Figure 2} 
+##### UMAPs and composition analysis ####
+Idents(SScCD4) <- SScCD4$R09
+
+clusterNum <- c('0_CCR7_EEF1B2_TUBA1A', '1_MALAT1_EEF1B2_CCR7', '2_FOSB_FOS_IER2','3_S100A4_KLRB1_LTB','4_YPEL5_EIF1_SARAF', '5_VIM_ANXA1_S100A4','6_FTH1_JUNB_SRGN','7_SRGN_GZMK_ZFP36','8_TPT1_DDX5_EEF2','9_S100A4_LMNA_S100A10', '10_FOXP3_RTKN2_TIGIT',  '11_NKG7_CCL5_GZMH')
+
+umap_data <- as.data.frame(Embeddings(SScCD4, "umap"))
+umap_data$cluster <- Idents(SScCD4)
+
+# Calcular los centroides de cada grupo
+centroids <- umap_data %>%
+  group_by(cluster) %>%
+  summarize(UMAP_1 = mean(umap_1), UMAP_2 = mean(umap_2))
+
+# Crear el gráfico UMAP con etiquetas de grupo
+umap_plot <- ggplot(umap_data, aes(x = umap_1, y = umap_2, color = cluster)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = clusterCols) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("UMAP by Cluster") +
+  geom_text(data = centroids, aes(x = UMAP_1, y = UMAP_2, label = cluster), color = "black", size = 5, fontface = "bold")
+
+Idents(SScCD4) <- SScCD4$cell_type
+
+umap_ct <- as.data.frame(Embeddings(SScCD4, "umap"))
+umap_ct$celltype <- Idents(SScCD4)
+
+# Calcular los centroides de cada tipo de célula
+centroids <- umap_ct %>%
+  group_by(celltype) %>%
+  summarize(UMAP_1 = mean(umap_1), UMAP_2 = mean(umap_2))
+
+# Crear el gráfico UMAP con etiquetas de tipo de célula
+umap_ct_plot <- ggplot(umap_ct, aes(x = umap_1, y = umap_2, color = celltype)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = colorCT) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("UMAP by annotation") +
+  geom_text(data = centroids, aes(x = UMAP_1, y = UMAP_2, label = celltype), color = "black", size = 5, fontface = "bold")
+
+data <- data.frame(
+  y = length(clusterNum):1,  # Posiciones y para los cuadros
+  color = clusterCols,
+  number = clusterNum
+)
+
+# Crear el plot de la leyenda de clusters
+legendClusters <- ggplot(data, aes(x = 1, y = y, fill = color)) +
+  geom_tile(width = 0.6, height = 0.6, color = "black") +
+  geom_text(aes(x = 1.5, label = number), hjust = 0, color = "black", size = 4, fontface = "bold") +
+  scale_fill_identity() +
+  coord_fixed(ratio = 1) +
+  scale_x_continuous(expand = c(0, 0), breaks = NULL, limits = c(0.5, 12)) +
+  scale_y_continuous(expand = c(0, 0), breaks = NULL) +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.margin = unit(c(1, 1, 1, 1), "mm")
+  )
+
+dataCT <- data.frame(
+  y = length(cellt):1,  # Posiciones y para los cuadros
+  color = colorCT,
+  number = cellt
+)
+
+# Crear el plot de la leyenda de tipos de células
+legendCT <- ggplot(dataCT, aes(x = 1, y = y, fill = color)) +
+  geom_tile(width = 0.6, height = 0.6, color = "black") +
+  geom_text(aes(x = 1.5, label = number), hjust = 0, color = "black", size = 5, fontface = "bold") +
+  scale_fill_identity() +
+  coord_fixed(ratio = 1) +
+  scale_x_continuous(expand = c(0, 0), breaks = NULL, limits = c(0.5, 12)) +
+  scale_y_continuous(expand = c(0, 0), breaks = NULL) +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.margin = unit(c(1, 1, 1, 1), "mm")
+  )
+
+# Ajustar las dimensiones de los gráficos
+umap_plot <- umap_plot + theme(aspect.ratio = 1)
+umap_ct_plot <- umap_ct_plot + theme(aspect.ratio = 1)
+
+# Compo plots ####
+q1 <- ggplot(leiden, aes(fill=factor(Cluster, levels = c("11","10","9","8","7","6","5","4","3","2","1","0")), x=factor(Sample,levels = SampleList), y=ContributionPercent)) + 
+  geom_bar(stat = "identity", color='black', width = 1)+
+  labs(fill="Cluster",x=NULL,y="Fraction of cells")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position="none",
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=12,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_blank())+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=rev(clusterCols),
+                    labels = c("11","10","9","8","7","6","5","4","3","2","1","0"))+
+  scale_x_discrete(labels=newnames2)
+
+qCT2 <- ggplot(CellTypes, aes(fill=factor(Cell_Type, levels =rev(cellt)), x=factor(Sample,levels =newnames), y=ContributionPercent)) +   geom_bar(stat = "identity", color='black',width = 1)+
+  labs(fill="Cell_Type",x=NULL,y="Fraction of cells")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position="none",
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=12,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_blank())+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=rev(colorCT),
+                    labels = rev(cellt))+
+  scale_x_discrete(labels=newnames2)
+
+# Combinación de gráficos
+combined_plottest1 <- plot_grid(
+  umap_plot, q1,
+  nrow = 1,
+  rel_heights = c(1.2, 1),
+  rel_widths = c(1.2, 1),
+  axis = "tb"
+)
+
+cluster <- wrap_plots(combined_plottest1, legendClusters, widths = c(1, 0.35))
+
+combined_CT <- plot_grid(
+  umap_ct_plot, qCT2,
+  nrow = 1,
+  rel_heights = c(1.2, 1),
+  rel_widths = c(1.2, 1),
+  axis = "tb"
+)
+
+CT <- wrap_plots(combined_CT, legendCT, widths = c(1, 0.35))
+
+# Mostrar los gráficos combinados
+print(cluster)
+print(CT)
+
+##### Clusters significativos  ####
+
+#Cluster 4 - Significativo FDR <0.1
+leiden4 <- leiden %>% filter(leiden$Cluster=="4") #Cluster0
+
+leiden41 <- rbind(leiden4,leiden4[c(9:16),])
+subtype <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","lcSSc","lcSSc","lcSSc","dcSSc","lcSSc","lcSSc","dcSSc","lcSSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc")
+leiden41$ClinicalSub <- subtype
+
+
+Cluster4 <- ggplot(leiden41, aes(x=factor(ClinicalSub, levels=c("CTRL","SSc","lcSSc","dcSSc")), y=Contribution, fill=ClinicalSub)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#AEC6CF','#FFFACD','#C3E5C3'))+
+  ggtitle("Cluster 4 YPEL5_EIF1_SARAF")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc"),c("CTRL","lcSSc"),c("CTRL","dcSSc"),c("lcSSc","dcSSc")) , label = "p.signif", method = "wilcox.test")
+
+#
+#filenameC4PDF <- "Cluster4CompositionVln.pdf"
+#filenameC4JPG <- "Cluster4CompositionVln.jpg"
+#ggsave(filenameC4PDF,path = pathTO,dpi = 300,device = 'pdf')
+#ggsave(filenameC4JPG,path = pathTO,dpi = 300,device = 'pdf')
+
+#Cluster 3 - Sugestivo pval < 0.05
+leiden3 <- leiden %>% filter(leiden$Cluster=="3") #Cluster0
+
+leiden31 <- rbind(leiden3,leiden3[c(9:16),])
+subtype <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","lcSSc","lcSSc","lcSSc","dcSSc","lcSSc","lcSSc","dcSSc","lcSSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc")
+leiden31$ClinicalSub <- subtype
+
+Cluster3 <- ggplot(leiden31, aes(x=factor(ClinicalSub, levels=c("CTRL","SSc","lcSSc","dcSSc")), y=Contribution, fill=ClinicalSub)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#AEC6CF','#FFFACD','#C3E5C3'))+
+  ggtitle("Cluster 3 S100A4_KLRB1_LTB")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc"),c("CTRL","lcSSc"),c("CTRL","dcSSc"),c("lcSSc","dcSSc")) , label = "p.signif", method = "wilcox.test")
+
+#
+#filenameC3PDF <- "Cluster3CompositionVln.pdf"
+#filenameC3JPG <- "Cluster3CompositionVln.jpg"
+#ggsave(filenameC3PDF,path = pathTO,dpi = 300,device = 'pdf')
+#ggsave(filenameC3JPG,path = pathTO,dpi = 300,device = 'pdf')
+
+#Cluster 9 - Sugestivo pval < 0.05
+leiden9 <- leiden %>% filter(leiden$Cluster=="9") #Cluster0
+
+leiden91 <- rbind(leiden9,leiden9[c(9:16),])
+subtype <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","lcSSc","lcSSc","lcSSc","dcSSc","lcSSc","lcSSc","dcSSc","lcSSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc")
+leiden91$ClinicalSub <- subtype
+
+Cluster9 <- ggplot(leiden91, aes(x=factor(ClinicalSub, levels=c("CTRL","SSc","lcSSc","dcSSc")), y=Contribution, fill=ClinicalSub)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#AEC6CF','#FFFACD','#C3E5C3'))+
+  ggtitle("Cluster 9 S100A4_LMNA_S100A10")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc"),c("CTRL","lcSSc"),c("CTRL","dcSSc"),c("lcSSc","dcSSc")) , label = "p.signif", method = "wilcox.test")
+
+combined_comp <- plot_grid(
+  Cluster3,Cluster4,Cluster9,
+  nrow = 1,        # Arrange in 1 column (vertically), use nrow = 1 for horizontal arrangement
+  #labels = c("A", "B"),  # Optional: Label each plot
+  #label_size = 16,  # Optional: Size of the labels
+  rel_heights = c(1,1,1), #Alto
+  rel_widths = c(1,1,1) #Ancho
+)
+
+combined_comp
+
+# Mostrar los gráficos combinados
+combined <- plot_grid(
+  cluster,CT,
+  ncol = 1,        # Arrange in 1 column (vertically), use nrow = 1 for horizontal arrangement
+  #labels = c("A", "B"),  # Optional: Label each plot
+  #label_size = 16,  # Optional: Size of the labels
+  rel_heights = c(1,1), #Alto
+  rel_widths = c(1,1), #Ancho
+  axis = "tb"
+)
+
+print(combined)
+
+#### combinado final
+combined_comp_container <- plot_grid(combined_comp, ncol = 1, rel_heights = c(1), rel_widths = c(0.25))
+
+print(combined_comp_container)
+
+combined_final <- plot_grid(
+  combined,combined_comp_container,
+  ncol = 1,        # Arrange in 1 column (vertically), use nrow = 1 for horizontal arrangement
+  label_size = 16,  # Optional: Size of the labels
+  rel_heights = c(1,0.30) #Alto
+  #rel_widths = c(1,0.5) #Ancho
+)
+
+print(combined_final)
+
+ggsave(plot = combined,filename = "Figure2_AC_def2.pdf", path = "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication",dpi = 300, width = 10.3, height = 8, device = 'pdf')
+ggsave(plot = combined_comp_container,filename = "Figure2_D_def2.pdf", path = "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication",dpi = 300, width = 10.3, height = 3.1, device = 'pdf')
+
+```
+
+## Plotting all the plots of Figure 2. - Review
+```{r Figure 2 review} 
+##### UMAPs and composition analysis ####
+Idents(SScCD4) <- SScCD4$R09
+
+clusterNum <- c('0_CCR7_EEF1B2_TUBA1A', '1_MALAT1_EEF1B2_CCR7', '2_FOSB_FOS_IER2','3_S100A4_KLRB1_LTB','4_YPEL5_EIF1_SARAF', '5_VIM_ANXA1_S100A4','6_FTH1_JUNB_SRGN','7_SRGN_GZMK_ZFP36','8_TPT1_DDX5_EEF2','9_S100A4_LMNA_S100A10', '10_FOXP3_RTKN2_TIGIT',  '11_NKG7_CCL5_GZMH')
+
+umap_data <- as.data.frame(Embeddings(SScCD4, "umap"))
+umap_data$cluster <- Idents(SScCD4)
+
+# Calcular los centroides de cada grupo
+centroids <- umap_data %>%
+  group_by(cluster) %>%
+  summarize(UMAP_1 = mean(umap_1), UMAP_2 = mean(umap_2))
+
+# Crear el gráfico UMAP con etiquetas de grupo
+umap_plot <- ggplot(umap_data, aes(x = umap_1, y = umap_2, color = cluster)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = clusterCols) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("UMAP by Cluster") +
+  geom_text(data = centroids, aes(x = UMAP_1, y = UMAP_2, label = cluster), color = "black", size = 5, fontface = "bold")
+
+Idents(SScCD4) <- SScCD4$cell_type
+
+umap_ct <- as.data.frame(Embeddings(SScCD4, "umap"))
+umap_ct$celltype <- Idents(SScCD4)
+
+# Calcular los centroides de cada tipo de célula
+centroids <- umap_ct %>%
+  group_by(celltype) %>%
+  summarize(UMAP_1 = mean(umap_1), UMAP_2 = mean(umap_2))
+
+# Crear el gráfico UMAP con etiquetas de tipo de célula
+umap_ct_plot <- ggplot(umap_ct, aes(x = umap_1, y = umap_2, color = celltype)) +
+  geom_point(size = 1) +
+  scale_color_manual(values = colorCT) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("UMAP by annotation") +
+  geom_text(data = centroids, aes(x = UMAP_1, y = UMAP_2, label = celltype), color = "black", size = 5, fontface = "bold")
+
+data <- data.frame(
+  y = length(clusterNum):1,  # Posiciones y para los cuadros
+  color = clusterCols,
+  number = clusterNum
+)
+
+# Crear el plot de la leyenda de clusters
+legendClusters <- ggplot(data, aes(x = 1, y = y, fill = color)) +
+  geom_tile(width = 0.6, height = 0.6, color = "black") +
+  geom_text(aes(x = 1.5, label = number), hjust = 0, color = "black", size = 4, fontface = "bold") +
+  scale_fill_identity() +
+  coord_fixed(ratio = 1) +
+  scale_x_continuous(expand = c(0, 0), breaks = NULL, limits = c(0.5, 12)) +
+  scale_y_continuous(expand = c(0, 0), breaks = NULL) +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.margin = unit(c(1, 1, 1, 1), "mm")
+  )
+
+dataCT <- data.frame(
+  y = length(cellt):1,  # Posiciones y para los cuadros
+  color = colorCT,
+  number = cellt
+)
+
+# Crear el plot de la leyenda de tipos de células
+legendCT <- ggplot(dataCT, aes(x = 1, y = y, fill = color)) +
+  geom_tile(width = 0.6, height = 0.6, color = "black") +
+  geom_text(aes(x = 1.5, label = number), hjust = 0, color = "black", size = 5, fontface = "bold") +
+  scale_fill_identity() +
+  coord_fixed(ratio = 1) +
+  scale_x_continuous(expand = c(0, 0), breaks = NULL, limits = c(0.5, 12)) +
+  scale_y_continuous(expand = c(0, 0), breaks = NULL) +
+  theme_void() +
+  theme(
+    legend.position = "none",
+    plot.margin = unit(c(1, 1, 1, 1), "mm")
+  )
+
+# Ajustar las dimensiones de los gráficos
+umap_plot <- umap_plot + theme(aspect.ratio = 1)
+umap_ct_plot <- umap_ct_plot + theme(aspect.ratio = 1)
+
+# Compo plots ####
+q1 <- ggplot(leiden, aes(fill=factor(Cluster, levels = c("11","10","9","8","7","6","5","4","3","2","1","0")), x=factor(Sample,levels = SampleList), y=ContributionPercent)) + 
+  geom_bar(stat = "identity", color='black', width = 1)+
+  labs(fill="Cluster",x=NULL,y="Fraction of cells")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position="none",
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=12,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_blank())+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=rev(clusterCols),
+                    labels = c("11","10","9","8","7","6","5","4","3","2","1","0"))+
+  scale_x_discrete(labels=newnames2)
+
+qCT2 <- ggplot(CellTypes, aes(fill=factor(Cell_Type, levels =rev(cellt)), x=factor(Sample,levels =newnames), y=ContributionPercent)) +   geom_bar(stat = "identity", color='black',width = 1)+
+  labs(fill="Cell_Type",x=NULL,y="Fraction of cells")+
+  theme_classic()+
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.position="none",
+        axis.ticks = element_blank(),
+        axis.text=element_text(size=12,face="bold"),
+        axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1),
+        axis.title=element_blank())+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=rev(colorCT),
+                    labels = rev(cellt))+
+  scale_x_discrete(labels=newnames2)
+
+# Combinación de gráficos
+combined_plottest1 <- plot_grid(
+  umap_plot, q1,
+  nrow = 1,
+  rel_heights = c(1.2, 1),
+  rel_widths = c(1.2, 1),
+  axis = "tb"
+)
+
+cluster <- wrap_plots(combined_plottest1, legendClusters, widths = c(1, 0.35))
+
+combined_CT <- plot_grid(
+  umap_ct_plot, qCT2,
+  nrow = 1,
+  rel_heights = c(1.2, 1),
+  rel_widths = c(1.2, 1),
+  axis = "tb"
+)
+
+CT <- wrap_plots(combined_CT, legendCT, widths = c(1, 0.35))
+
+# Mostrar los gráficos combinados
+print(cluster)
+print(CT)
+
+##### Clusters significativos  ####
+
+#Cluster 4 - Significativo FDR <0.1
+leiden4 <- leiden %>% filter(leiden$Cluster=="4") #Cluster
+
+Cluster4 <- ggplot(leiden4, aes(x=factor(Condition, levels=c("CTRL","SSc")), y=Contribution, fill=Condition)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#C3E5C3'))+
+  ggtitle("Cluster 4 YPEL5_EIF1_SARAF")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc")) , label = "p.signif", method = "wilcox.test")
+
+#
+#filenameC4PDF <- "Cluster4CompositionVln.pdf"
+#filenameC4JPG <- "Cluster4CompositionVln.jpg"
+#ggsave(filenameC4PDF,path = pathTO,dpi = 300,device = 'pdf')
+#ggsave(filenameC4JPG,path = pathTO,dpi = 300,device = 'pdf')
+
+#Cluster 3 - Sugestivo pval < 0.05
+leiden3 <- leiden %>% filter(leiden$Cluster=="3") #Cluster0
+
+Cluster3 <- ggplot(leiden3, aes(x=factor(Condition, levels=c("CTRL","SSc")), y=Contribution, fill=Condition)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#C3E5C3'))+
+  ggtitle("Cluster 3 S100A4_KLRB1_LTB")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc")) , label = "p.signif", method = "wilcox.test")
+
+#
+#filenameC3PDF <- "Cluster3CompositionVln.pdf"
+#filenameC3JPG <- "Cluster3CompositionVln.jpg"
+#ggsave(filenameC3PDF,path = pathTO,dpi = 300,device = 'pdf')
+#ggsave(filenameC3JPG,path = pathTO,dpi = 300,device = 'pdf')
+
+#Cluster 9 - Sugestivo pval < 0.05
+leiden9 <- leiden %>% filter(leiden$Cluster=="9") #Cluster0
+
+leiden91 <- rbind(leiden9,leiden9[c(9:16),])
+subtype <- c("CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","CTRL","lcSSc","lcSSc","lcSSc","dcSSc","lcSSc","lcSSc","dcSSc","lcSSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc","SSc")
+leiden91$ClinicalSub <- subtype
+
+Cluster9 <- ggplot(leiden91, aes(x=factor(Condition, levels=c("CTRL","SSc")), y=Contribution, fill=Condition)) + 
+  geom_boxplot(width=0.5, alpha = 0.75)+
+  geom_dotplot(binaxis='y', stackdir='center',binwidth = 0.0035)+
+  theme_bw()+
+  theme(legend.position = '',
+        axis.text.x = element_text(size=10,face = "bold"),
+        axis.text.y = element_text(size=10),
+        axis.title = element_blank(),
+        title = element_text(size = 10),
+        plot.margin = unit(c(1, 1, 1, 1), "mm"))+
+  scale_fill_manual(guide = guide_legend(reverse=TRUE), 
+                    values=c('#D8BFD8','#C3E5C3'))+
+  ggtitle("Cluster 9 S100A4_LMNA_S100A10")+
+  stat_compare_means(comparisons = list(c("CTRL","SSc")) , label = "p.signif", method = "wilcox.test")
+
+combined_comp <- plot_grid(
+  Cluster3,Cluster4,Cluster9,
+  nrow = 1,        # Arrange in 1 column (vertically), use nrow = 1 for horizontal arrangement
+  #labels = c("A", "B"),  # Optional: Label each plot
+  #label_size = 16,  # Optional: Size of the labels
+  rel_heights = c(1,1,1), #Alto
+  rel_widths = c(1,1,1) #Ancho
+)
+
+combined_comp
+
+# Mostrar los gráficos combinados
+combined <- plot_grid(
+  cluster,CT,
+  ncol = 1,        # Arrange in 1 column (vertically), use nrow = 1 for horizontal arrangement
+  #labels = c("A", "B"),  # Optional: Label each plot
+  #label_size = 16,  # Optional: Size of the labels
+  rel_heights = c(1,1), #Alto
+  rel_widths = c(1,1), #Ancho
+  axis = "tb"
+)
+
+print(combined)
+
+#### combinado final
+combined_comp_container <- plot_grid(combined_comp, ncol = 1, rel_heights = c(1), rel_widths = c(0.25))
+
+print(combined_comp_container)
+
+combined_final <- plot_grid(
+  combined,combined_comp_container,
+  ncol = 1,        # Arrange in 1 column (vertically), use nrow = 1 for horizontal arrangement
+  label_size = 16,  # Optional: Size of the labels
+  rel_heights = c(1,0.30) #Alto
+  #rel_widths = c(1,0.5) #Ancho
+)
+
+print(combined_final)
+
+ggsave(plot = combined,filename = "Figure2_AC_def2_v2.pdf", path = "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication",dpi = 300, width = 10.3, height = 8, device = 'pdf')
+ggsave(plot = combined_comp_container,filename = "Figure2_D_def2_v2.pdf", path = "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication",dpi = 300, width = 10.3, height = 3.1, device = 'pdf')
+
+```
+
+## Feature and plots
+```{r}
+Idents(SScCD4) <- SScCD4$cell_type
+
+Tcm_subset <- subset(x = SScCD4, idents = "Tcm")
+Temra_subset <- subset(x = SScCD4, idents = "Temra")
+Treg_subset <- subset(x = SScCD4, idents = "Treg")
+Tn_subset <- subset(x = SScCD4, idents = "Tn")
+Tem_subset <- subset(x = SScCD4, idents = "Tem")
+
+```
+## dotplots
+```{r Figure 3}
+## Dotplots
+Tng <- c("IFITM1","IFITM2","AREG","LTB","HLA-B")
+Tcmg <- c("IFITM1","IFITM2","CTSH","KLRB1","PIM1")
+Temg <- c("IFITM1","IFITM2","LTB","SELL","TMSB10")
+Temrag <- c("IFITM1","IFITM2","IL32","GZMH","PFN1")
+Tregg <- c("IFITM1","IFITM2","FOXP3","FCRL3","TIGIT")
+
+dotmap_tcm <- DotPlot(Tcm_subset, features = Tcmg, group.by = "condition")+ 
+  RotatedAxis()+
+  ylab("Tcm")+
+  theme_bw()+
+  theme(axis.text.x = element_text(size = 12,angle = 0),
+        axis.text.y = element_text(size=10),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(),
+        legend.position = "none",
+        panel.grid = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1))+
+  scale_color_viridis_b()
+#dotmap_tcm
+
+dotmap_temra <- DotPlot(Temra_subset, features = Temrag, group.by = "condition")+ 
+  RotatedAxis()+
+  ylab("Temra")+
+  theme_bw()+  
+  theme(axis.text.x = element_text(size = 12,angle = 0),
+        axis.text.y = element_text(size=10),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(),
+        legend.position = "none",
+        panel.grid = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1))+
+  scale_color_viridis_b()
+#dotmap_temra
+
+dotmap_tem <- DotPlot(Tem_subset, features = Temg, group.by = "condition")+ 
+  RotatedAxis()+
+  ylab("Tem")+
+  theme_bw()+  
+  theme(axis.text.x = element_text(size = 12,angle = 0),
+        axis.text.y = element_text(size=10),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(),
+        legend.position = "none",
+        panel.grid = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1))+
+  scale_color_viridis_b()
+#dotmap_tem
+
+dotmap_tn <- DotPlot(Tn_subset, features = Tng, group.by = "condition")+ 
+  RotatedAxis()+
+  ylab("Tn")+
+  theme_bw()+  
+  theme(axis.text.x = element_text(size = 12,angle = 0),
+        axis.text.y = element_text(size=10),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(),
+        legend.position = "none",
+        panel.grid = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1))+
+  scale_color_viridis_b()
+#dotmap_tn
+
+dotmap_treg <- DotPlot(Treg_subset, features = Tregg, group.by = "condition")+ 
+  RotatedAxis()+
+  ylab("Treg")+
+  theme_bw()+  
+  theme(axis.text.x = element_text(size = 12,angle = 0),
+        axis.text.y = element_text(size=10),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(),
+        legend.position = "bottom",
+        legend.title = element_text(size=10),
+        legend.key.size = unit(0.5, "cm"),
+        legend.key.width = unit(0.5,"cm"),
+        legend.text=element_text(size=8),
+        panel.grid = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA, size = 1))+
+  scale_color_viridis_b()
+#dotmap_treg
+```
+
+### Combined dotplot Figure 3.
+```{r}
+comb_dot1 <- plot_grid(
+  dotmap_tn,dotmap_tcm,dotmap_tem,
+  ncol = 1,        # Arrange in 1 column (vertically), use nrow = 1 for horizontal arrangement
+  #labels = c("","D"),  # Optional: Label each plot
+  #label_size = 16,  # Optional: Size of the labels
+  #rel_heights = c(1,0.30) #Alto
+  rel_widths = c(1,1,1) #Ancho
+)
+
+comb_dot2 <- plot_grid(
+  dotmap_temra,dotmap_treg,
+  ncol = 1,        # Arrange in 1 column (vertically), use nrow = 1 for horizontal arrangement
+  #labels = c("","D"),  # Optional: Label each plot
+  #label_size = 16,  # Optional: Size of the labels
+  rel_heights = c(0.75,1), #Alto
+  rel_widths = c(1,1) #Ancho
+)
+
+comb_dot <- plot_grid(
+  comb_dot1,comb_dot2,
+  ncol = 1,        # Arrange in 1 column (vertically), use nrow = 1 for horizontal arrangement
+  #labels = c("","D"),  # Optional: Label each plot
+  #label_size = 16,  # Optional: Size of the labels
+  rel_heights = c(1,0.8), #Alto
+  rel_widths = c(1,1) #Ancho
+)
+comb_dot
+```
+
+```{r violin functions}
+modify_vlnplot<- function(obj, 
+                          feature, 
+                          pt.size = 0, 
+                          plot.margin = unit(c(-0.75, 0, -0.75, 0), "cm"),
+                          ...) {
+  p<- VlnPlot(obj, features = feature, pt.size = pt.size, ... )  + 
+    xlab("") + ylab(feature) + ggtitle("") + 
+    theme(legend.position = "none", 
+          axis.text.x = element_blank(), 
+          axis.ticks.x = element_blank(), 
+          axis.title.y = element_text(size = rel(1), angle = 0), 
+          axis.text.y = element_text(size = rel(1)), 
+          plot.margin = plot.margin ) 
+  return(p)
+}
+
+## extract the max value of the y axis
+extract_max<- function(p){
+  ymax<- max(ggplot_build(p)$layout$panel_scales_y[[1]]$range$range)
+  return(ceiling(ymax))
+}
+
+
+## main function
+StackedVlnPlot<- function(obj, features,
+                          pt.size = 0, 
+                          plot.margin = unit(c(-0.75, 0, -0.75, 0), "cm"),
+                          ...) {
+  
+  plot_list<- purrr::map(features, function(x) modify_vlnplot(obj = obj,feature = x, ...))
+  
+  # Add back x-axis title to bottom plot. patchwork is going to support this?
+  plot_list[[length(plot_list)]]<- plot_list[[length(plot_list)]] +
+    theme(axis.text.x=element_text(), axis.ticks.x = element_line())
+  
+  # change the y-axis tick to only max value 
+  ymaxs<- purrr::map_dbl(plot_list, extract_max)
+  plot_list<- purrr::map2(plot_list, ymaxs, function(x,y) x + 
+                            scale_y_continuous(breaks = c(y)) + 
+                            expand_limits(y = y))
+
+  p<- patchwork::wrap_plots(plotlist = plot_list, ncol = 1)
+  return(p)
+}
+```
+
+## Figure 3 reviewers
+```{r Gene list}
+## Violin Plots
+Tng <- c("IFITM1","IFITM2","AREG","LTB","HLA-B")
+Tcmg <- c("IFITM1","IFITM2","CTSH","KLRB1","PIM1")
+Temg <- c("IFITM1","IFITM2","LTB","SELL","TMSB10")
+Temrag <- c("IFITM1","IFITM2","IL32","GZMH","PFN1")
+Tregg <- c("IFITM1","IFITM2","FOXP3","FCRL3","TIGIT")
+```
+
+```{r Figure 3 reviewers}
+Tcmg <- c("IFITM1","IFITM2","CTSH","KLRB1","PIM1")
+metaTcm <- Tcm_subset@meta.data %>%
+  select(Sample, condition, R09, cell_type)
+
+# Extract and filter RNA expression data
+metaTcm_features <- as.data.frame(Tcm_subset@assays$RNA@data)
+metaTcm_features.filter <- metaTcm_features[rownames(metaTcm_features) %in% Tcmg, ]
+
+scaled_expression <- t(apply(metaTcm_features.filter, 1, scale))
+
+# Convert the scaled expression matrix back to a data frame
+scaled_expression <- as.data.frame(scaled_expression)
+
+# Add gene names as rownames
+rownames(scaled_expression) <- rownames(metaTcm_features.filter)
+
+# Transpose the filtered expression data and combine with metadata
+metaTcm_combined <- cbind(metaTcm, t(scaled_expression))
+
+# Reshape data to long format for ggplot
+metaTcm_long <- metaTcm_combined %>%
+  pivot_longer(
+    cols = all_of(Tcmg),          # Select columns corresponding to Tcmg genes
+    names_to = "Gene",            # Column name for gene names
+    values_to = "Expression"      # Column name for expression values
+  ) %>%
+  group_by(condition, Gene) %>%                          
+  mutate(TotalExpression = sum(Expression)) 
+
+
+# Create the violin plot
+ggplot(metaTcm_long, aes(x = condition, y = Expression, fill = condition)) +
+  geom_violin(alpha = 0.5) +
+  facet_wrap(~factor(Gene, levels = Tcmg), scales = "free_y",nrow = 1) +  # Facet by gene, allow different y scales
+  labs(title = "", x = "", y = "Expression") +
+  scale_fill_manual(values = color_con) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(size = 22),
+    axis.text = element_text(size = 15),
+    axis.text.x = element_blank(),
+    axis.title = element_text(size = 20),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 15),
+    panel.grid.major.x = element_blank(),
+    legend.position = "bottom"
+  )
+
+ggplot(metaTcm_long, aes(x = condition, y = Expression, fill = TotalExpression)) +
+  geom_violin(alpha = 0.7) +
+  facet_wrap(~factor(Gene, levels = Tcmg), scales = "free_y",ncol = 1) +  # Facet by gene, allow different y scales
+  labs(title = "", x = "", y = "Expression") +
+  scale_fill_viridis_c() +  # Use viridis color palette
+  theme_light() +
+  theme(
+    plot.title = element_text(size = 30,face = "bold"),
+    axis.text = element_text(size = 15),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(size = 20),
+    panel.grid.major.x = element_blank(),
+    legend.position = "none",
+    strip.text = element_text(size = 15, face = "bold") 
+  )
+```
+
+```{r violin plot function}
+
+VlnMk <- function(SeuObj, genelist, idnt){
+  
+  SeuObj_subset <- subset(x = SeuObj, idents = idnt)
+  
+  metaSub <- SeuObj_subset@meta.data %>%
+    select(Sample, condition, R09, cell_type) #metadata
+
+  metaSub_features <- as.data.frame(SeuObj_subset@assays$RNA@data) # Extract and filter RNA expression data
+  metaSub_features.filter <- metaSub_features[rownames(metaSub_features) %in% genelist, ]
+  
+  scaled_expression <- t(apply(metaSub_features.filter, 1, scale))
+  scaled_expression <- as.data.frame(scaled_expression) # Convert the scaled expression matrix back to a data frame
+  rownames(scaled_expression) <- rownames(metaSub_features.filter) # Add gene names as rownames
+  metaSub_combined <- cbind(metaSub, t(scaled_expression)) # Transpose the filtered expression data and combine with metadata
+  
+  # Reshape data to long format for ggplot
+  metaSub_long <- metaSub_combined %>%
+    pivot_longer(
+      cols = all_of(genelist),          # Select columns corresponding to Subg genes
+      names_to = "Gene",            # Column name for gene names
+      values_to = "Expression"      # Column name for expression values
+    ) %>%
+    group_by(condition, Gene) %>%                          
+    mutate(TotalExpression = sum(Expression)) 
+  
+  MTplot <- ggplot(metaSub_long, aes(x = condition, y = Expression, fill = TotalExpression)) +
+    geom_violin(alpha = 0.7) +
+    facet_wrap(~factor(Gene, levels = genelist), scales = "free_y",ncol = 1) +  # Facet by gene, allow different y scales
+    labs(title = "", x = "", y = "Expression") +
+    scale_fill_viridis_c() +  # Use viridis color palette
+    theme_light() +
+    theme(
+      plot.title = element_text(size = 22),
+      axis.text = element_text(size = 15),
+      axis.text.x = element_text(angle = 45, hjust = 1),
+      axis.title = element_text(size = 20),
+      panel.grid.major.x = element_blank(),
+      legend.position = "none",
+      strip.text = element_text(size = 15, face = "bold") 
+    )
+  return(list(MTplot,metaSub_long))
+}
+
+
+```
+
+```{r violins per subtype}
+temraVln <- list()
+temraVln <- VlnMk(SScCD4,Temrag, "Temra")
+temraVln.plot <- temraVln[1]
+
+temVln <- list()
+temVln <- VlnMk(SScCD4,Temg, "Tem")
+temVln.plot <- temVln[1]
+
+tcmVln <- list()
+tcmVln <- VlnMk(SScCD4,Tcmg, "Tcm")
+tcmVln.plot <- tcmVln[1]
+
+tnVln <- list()
+tnVln <- VlnMk(SScCD4,Tng, "Tn")
+tnVln.plot <- tnVln[1]
+
+tregVln <- list()
+tregVln <- VlnMk(SScCD4,Tregg, "Treg")
+tregVln.plot <- tregVln[1]
+
+```
+
+```{r}
+tn.plot <- tnVln.plot[[1]] + labs(title = "Tn", x = "", y = "Expression")
+tcm.plot <- tcmVln.plot[[1]] + labs(title = "Tcm", x = "", y = "")
+tem.plot <- temVln.plot[[1]] + labs(title = "Tem", x = "", y = "")
+temra.plot <- temraVln.plot[[1]] + labs(title = "Temra", x = "", y = "")
+treg.plot <- tregVln.plot[[1]] + labs(title = "Treg", x = "", y = "")
+ggarrange(tn.plot,tcm.plot,tem.plot,temra.plot,treg.plot,nrow = 1)
+```
+
+```{r Figure 3 legend}
+data_example <- data.frame(
+  condition = factor(rep("Example", 2)),
+  Expression = c(1, 1),  # Punto único en una posición que no destaque
+  TotalExpression = c(0, 1)  # Valores mínimos y máximos
+)
+
+# Crea un plot con un punto casi invisible pero que activa la leyenda
+p1 <- ggplot(data_example, aes(x = condition, y = Expression, fill = TotalExpression)) +
+  geom_point(size = 0, show.legend = TRUE) +  # Punto invisible, pero muestra leyenda
+  scale_fill_viridis_c(
+    name = "Expression",
+    limits = c(0, 1),
+    breaks = c(0, 1),
+    labels = c("Low", "High")
+  ) +
+  theme_minimal() +
+  theme(
+    legend.title = element_text(size = 15),
+    legend.text = element_text(size = 12),
+    legend.position = "right",
+    panel.background = element_blank(),  # Elimina el fondo
+    panel.grid = element_blank(),  # Elimina la cuadrícula
+    axis.text = element_blank(),  # Elimina los textos de los ejes
+    axis.title = element_blank(),  # Elimina los títulos de los ejes
+    axis.ticks = element_blank(),  # Elimina los ticks
+    plot.background = element_blank()  # Fondo del plot transparente
+  ) +
+  labs(title = "", x = NULL, y = NULL) 
+
+
+p1
+
+legend <- get_legend(p1)
+
+if (!inherits(legend, "grob")) {
+  legend <- as.grob(legend)
+}
+
+# Crea un nuevo ggplot para mostrar solo la leyenda
+legend_plot <- ggplot() +
+  annotation_custom(legend, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf) +
+  theme_void() + 
+  theme(plot.margin = unit(c(0,0,0,0), "null"))
+
+# Dibuja el plot de la leyenda
+print(legend_plot)
+```
+
+```{r figure 3 final reviewers}
+figure3.rev <- ggarrange(tn.plot,tcm.plot,tem.plot,temra.plot,treg.plot,legend_plot,nrow = 1)
+```
+
+```{r UMAPs -figure supp}
+genes <- c("IFITM1","IFITM2","AREG","LTB","HLA-B","CTSH","KLRB1","PIM1","SELL","TMSB10","IL32","GZMA","GZMB","GZMH","CCR6","CCR7","RORC","PFN1","FOXP3","FCRL3","TIGIT")
+
+# Inicializa una lista para guardar los plots
+gene_plots <- list()
+
+# Bucle para generar un FeaturePlot para cada gen
+for (gene in genes) {
+  p <- FeaturePlot(SScCD4, features = gene, pt.size = 0.5) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+      axis.title = element_text(face = "bold", size = 12),
+      axis.text = element_blank(),
+      legend.position = "none",
+      panel.border = element_rect(color = "black", size = 1),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold", size = 14)
+    ) +
+    ggtitle(gene) +
+    scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data[gene, ])))
+
+  # Agrega el plot a la lista
+  gene_plots[[gene]] <- p
+}
+
+```
+
+```{r}
+combined_plot <- gene_plots[[1]] + gene_plots[[2]] + gene_plots[[3]] + gene_plots[[4]] + gene_plots[[5]] + gene_plots[[6]] + gene_plots[[7]] + gene_plots[[8]] + gene_plots[[9]] + gene_plots[[10]] + gene_plots[[11]] + gene_plots[[12]] + gene_plots[[13]] + gene_plots[[14]] + gene_plots[[15]] + gene_plots[[16]] + gene_plots[[17]] + gene_plots[[18]] + gene_plots[[19]] + gene_plots[[20]] + gene_plots[[21]]+ plot_layout(guides = 'collect',ncol = 3)
+```
+
+```{r}
+# Inicializa una lista para guardar los plots
+gene_plots <- list()
+
+# Bucle para generar un FeaturePlot para cada gen
+for (gene in genes) {
+  p <- FeaturePlot(SScCD4, features = gene, pt.size = 0.5) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+      axis.title = element_text(face = "bold", size = 12),
+      axis.text = element_blank(),
+      legend.position = "none",
+      panel.border = element_rect(color = "black", size = 1),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold", size = 14)
+    ) +
+    labs(x="",y="")+
+    ggtitle(gene) +
+    scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data[gene, ])))
+
+  # Agrega el plot a la lista
+  gene_plots[[gene]] <- p
+}
+combined_plot_2 <- gene_plots[[1]] + gene_plots[[2]] + gene_plots[[3]] + gene_plots[[4]] + gene_plots[[5]] + gene_plots[[6]] + gene_plots[[7]] + gene_plots[[8]] + gene_plots[[9]] + gene_plots[[10]] + gene_plots[[11]] + gene_plots[[12]] + gene_plots[[13]] + gene_plots[[14]] + gene_plots[[15]] + gene_plots[[16]] + gene_plots[[17]] + gene_plots[[18]] + gene_plots[[19]] + gene_plots[[20]] + gene_plots[[21]]+ plot_layout(guides = 'collect',ncol = 3)
+```
+
+
+### Combined dotplot Figure 3.
+```{r UMAPs figure supp}
+
+gFCRL3 <- FeaturePlot(SScCD4, features = "FCRL3",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("FCRL3") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["FCRL3", ])))
+
+gAREG <- FeaturePlot(SScCD4, features = "AREG",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("AREG") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["AREG", ])))
+
+gGZMH <- FeaturePlot(SScCD4, features = "GZMH",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("GZMH") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["GZMH", ])))
+
+gGZMA <- FeaturePlot(SScCD4, features = "GZMA",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("GZMA") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["GZMA", ])))
+
+gGZMB <- FeaturePlot(SScCD4, features = "GZMB",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("GZMB") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["GZMB", ])))
+
+gCCR6 <- FeaturePlot(SScCD4, features = "CCR6",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("CCR6") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["CCR6", ])))
+
+gCCR7 <- FeaturePlot(SScCD4, features = "CCR7",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("CCR7") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["CCR7", ])))
+
+gRORC <- FeaturePlot(SScCD4, features = "RORC",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("RORC") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["RORC", ])))
+
+gFOXP3 <- FeaturePlot(SScCD4, features = "FOXP3",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("FOXP3") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["FOXP3", ])))
+
+gKLRB1 <- FeaturePlot(SScCD4, features = "KLRB1",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("KLRB1") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["KLRB1", ])))
+
+gTIGIT <- FeaturePlot(SScCD4, features = "TIGIT",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("TIGIT") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["TIGIT", ])))
+
+```
+
+## Figure 3 Feature plots 
+```{r}
+gFCRL3 <- FeaturePlot(SScCD4, features = "FCRL3",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("FCRL3") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["FCRL3", ])))
+
+gAREG <- FeaturePlot(SScCD4, features = "AREG",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("AREG") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["AREG", ])))
+
+gGZMH <- FeaturePlot(SScCD4, features = "GZMH",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("GZMH") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["GZMH", ])))
+
+gGZMA <- FeaturePlot(SScCD4, features = "GZMA",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("GZMA") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["GZMA", ])))
+
+gGZMB <- FeaturePlot(SScCD4, features = "GZMB",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("GZMB") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["GZMB", ])))
+
+gCCR6 <- FeaturePlot(SScCD4, features = "CCR6",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("CCR6") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["CCR6", ])))
+
+gCCR7 <- FeaturePlot(SScCD4, features = "CCR7",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("CCR7") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["CCR7", ])))
+
+gRORC <- FeaturePlot(SScCD4, features = "RORC",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("RORC") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["RORC", ])))
+
+gFOXP3 <- FeaturePlot(SScCD4, features = "FOXP3",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("FOXP3") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["FOXP3", ])))
+
+gKLRB1 <- FeaturePlot(SScCD4, features = "KLRB1",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.text = element_blank(),
+    legend.position = "none",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("KLRB1") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["KLRB1", ])))
+
+gTIGIT <- FeaturePlot(SScCD4, features = "TIGIT",pt.size = 0.5)+
+  theme_bw()+
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 15),
+    axis.title = element_text(face = "bold", size = 12),
+    axis.text = element_blank(),
+    legend.position = "right",
+    panel.border = element_rect(color = "black", size = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.ticks = element_blank(),
+    strip.background = element_blank(),
+    strip.text = element_text(face = "bold", size = 14)
+  ) +
+  ggtitle("TIGIT") +
+  scale_color_viridis_b(limits = c(0, max(SScCD4[["RNA"]]@data["TIGIT", ])))
+
+
+
+```
+
+```{r}
+
+comb_Tn <- plot_grid(
+  gAREG,gCCR7,
+  ncol = 2, 
+  rel_widths = c(0.75,1) #Ancho
+)
+
+comb_Treg <- plot_grid(
+  gFOXP3,gFCRL3,
+  ncol = 2, 
+  rel_widths = c(0.75,1) #Ancho
+)
+
+comb_Tcm <- plot_grid(
+  gKLRB1,gCCR6,
+  ncol = 2, 
+  rel_widths = c(0.75,1) #Ancho
+)
+
+comb_Temra <- plot_grid(
+  gGZMA,gGZMB,
+  ncol = 2, 
+  rel_widths = c(0.75,1) #Ancho
+)
+
+comb_Tem <- plot_grid(
+  gGZMH,gTIGIT,
+  ncol = 2, 
+  rel_widths = c(0.75,1) #Ancho
+)
+
+comb_cells <- plot_grid(
+  comb_Tn,comb_Tcm, comb_Temra, comb_Tem, comb_Treg,
+  ncol = 1, 
+  rel_widths = c(1,1) #Ancho
+)
+
+```
+
+```{r}
+comb_fig3 <- plot_grid(
+  comb_cells,comb_dot,
+  ncol = 2, 
+  rel_widths = c(0.8,1) #Ancho
+)
+ggsave(plot = comb_fig3,filename = "Figure3.pdf", path = "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication",dpi = 300, width = 10.2, height = 8.46, device = 'pdf')
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
