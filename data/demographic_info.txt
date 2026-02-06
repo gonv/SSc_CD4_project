@@ -1,0 +1,17 @@
+Sample	Sex	Age	Raynaud	Pulmonary Hypertension	Hypothyroidism	Gastrointestinal involvement	Dyspnea	Sjogren	Other pulmonary affections	Cardiovascular affections	Mycophenolate	Rituximab	Prostanglandins
+SSc 1	Female	67	Yes	Yes	Yes	Yes	Yes	No	Pulmonary fibrosis	Yes	Yes	Yes	No
+SSc 2	Female	54	Yes	No	No	Yes	Yes	No	No	No	No	No	Yes
+SSc 3	Female	62	Yes	No	No	Yes	No	Yes	No	No	Yes	No	Yes
+SSc 4	Female	63	Yes	No	No	Yes	No	No	No	No	Yes	No	Yes
+SSc 5	Female	62	Yes	No	No	No	No	No	Bronchial hyperreactivity	Angina secondary to vasospasm	No	No	No
+SSc 6	Female	54	Yes	No	Yes	Yes	Yes	Yes	No	No	No	No	Yes
+SSc 7	Female	61	.	No	No	No	no	No	ILD	No	Yes	No	.
+SSc 8	Female	71	Yes	No	No	Yes	No	No	No	No	No	No	Yes
+Control 1	Female	62	.	.	.	.	.	.	.	.	.	.	.
+Control 2	Female	57	.	.	.	.	.	.	.	.	.	.	.
+Control 3	Female	55	.	.	.	.	.	.	.	.	.	.	.
+Control 4	Female	62	.	.	.	.	.	.	.	.	.	.	.
+Control 5	Female	58	.	.	.	.	.	.	.	.	.	.	.
+Control 6	Female	58	.	.	.	.	.	.	.	.	.	.	.
+Control 7	Female	58	.	.	.	.	.	.	.	.	.	.	.
+Control 8	Female	58	.	.	.	.	.	.	.	.	.	.	.
