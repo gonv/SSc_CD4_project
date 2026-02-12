@@ -1,272 +1,11 @@
 #!/usr/bin/env Rscript
 
-<<<<<<< HEAD
 data_lib <- c("devtools", "tidyverse", "ggpubr", "ggrepel", "enrichR","matrixStats",
               "RColorBrewer", "reshape2","shiny","DT","ggpubr","DelayedArray",
               "bslib","shinyjs","ggsignif","ggdendro","cowplot","pheatmap","rstatix", "Seurat")
 suppressPackageStartupMessages({
   invisible(lapply(data_lib, require, character.only = TRUE))
 })
-=======
-# volcano plot
-volcano_DEA <- function(df, tg, SCR,tgStim,tgCon,genesToRep = NULL) {
-  # Initialize additional columns
-	
-	res2_ann <- df
-  res2_ann$logP <- -log10(res2_ann$p_value)
-  res2_ann$delabel <- NA
-
-  # Generate title for the plot
-  titleN <- paste(tg, "KO vs", SCR, tgStim, tgCon, sep = " ")
-
-  # Calculate the FDR threshold for visualization
-  fdr_threshold <- -log10(max(res2_ann$p_value[res2_ann$q_value <= 0.05], na.rm = TRUE))
-  
-  # Create the plot 
-  volcano.p <- ggplot(res2_ann, aes(x = Beta, y = logP, color = Result)) +
-    geom_point(alpha = 0.6) +
-    scale_color_manual(values = c("Upregulated" = "#7FB77E", "Downregulated" = "#9730AF", "Not_significant" = "#bdbdbd")) +
-    geom_hline(yintercept = fdr_threshold, linetype = "dashed", color = "blue") +
-    ggtitle(titleN)  # Adding the title to the plot
-  
-  if(!is.null(genesToRep)){
-    res2_ann <- res2_ann %>%
-      mutate(
-        delabel = ifelse(geneName %in% genesToRep, geneName, delabel)  # Label only genes in gene_vector
-      )
-    
-    volcano.p <- volcano.p + 
-      ggrepel::geom_label_repel(data = dplyr::filter(res2_ann, !is.na(delabel)),
-                                aes(label = delabel),
-                                ,max.overlaps = Inf,
-                                color = "black")
-  }
-  
-  return(volcano.p)
-}
-
-# heatmap
-
-heatmap_DEA_2 <- function(df,tg, SCR, tgStim, tgCon,logCPM,genes) {
-  
-  gene.vec <-genes
-  geneID.vec <- unlist(sapply(gene.vec, gxtotx_conver))
-  geneID.vec.df <- as.data.frame(geneID.vec)
-  geneID.vec.df$geneNames <- rownames(geneID.vec.df)
-  rownames(geneID.vec.df) <- geneID.vec.df$geneID.vec
-  
-  log_filtered.list <- logCPM[as.vector(geneID.vec.df$geneID.vec),]
-  log_filtered.list <- na.omit(log_filtered.list)
-  
-  log_filtered.list$geneID <- rownames(log_filtered.list)
-  
-  log_filtered.list.2 <- merge(log_filtered.list, geneID.vec.df, by.x = "geneID", by.y = "geneID.vec")
-  rownames(log_filtered.list.2) <- log_filtered.list.2$geneNames
-  log_filtered.list.2 <- log_filtered.list.2[,-c(1,10)]
-  
-  log_filtered.list.mx <- as.matrix(log_filtered.list.2)
-  
-  print(str(log_filtered.list.mx))
-  
-  heatmap_plot <- pheatmap(log_filtered.list.mx, 
-                           scale = "row",  # Normaliza los datos por fila
-                           clustering_distance_rows = "euclidean",
-                           clustering_distance_cols = "euclidean",
-                           clustering_method = "average",  # Método de clustering, puede ser "average", "single", etc.
-                           color = colorRampPalette(c("blue", "white", "red"))(100),  # Gradiente de color
-                           show_rownames = TRUE,
-                           show_colnames = TRUE,
-                           fontsize_row = 10,
-                           fontsize_col = 10,
-                           angle_col = 90,  # Ángulo de los nombres de las columnas
-                           main = "")  # Título del heatmap
-  
-  return(heatmap_plot)
-}
-
-
-# Boxplot
-
-boxplot_DEA <- function(tgGene,tg,SCR,tgStim,tgCon,metaSample,txi_gx){
-  
-  res <- tpm_filter(
-    metaSample = metaSample, 
-    txi_tpm = txi_gx,
-    tg_name = tg, 
-    SCR = "SCR", 
-    stim = tgStim,
-    condition = tgCon
-  )
-  # Asigning results
-  txi_counts_filtered_byCon <- res$txi_tpm_filtered_byCon
-  metaSubset <- res$metaSubset
-  
-  logCPM <- log2(txi_counts_filtered_byCon+1)
-  
-  KO_n <- gxtotx_conver(tgGene)
-  
-  logCPM_fil <- logCPM %>% filter(rownames(logCPM)==KO_n)
-  
-  df <- as.data.frame(t(logCPM_fil))
-  colnames(df) <- c("KO")
-  
-  df$samples <- rownames(df)
-  
-  df_fnl <- merge(df,metaSubset,by="samples")
-  
-  plot.title <- paste(tg,"KO vs",SCR, sep = " ") 
-  
-  #ggplot(df_fnl, aes(x = geneKO, y = KO, color = geneKO)) +
-   # geom_dotplot(binaxis = "y", stackdir = "center",aes(fill=Donor))+
-  #  geom_boxplot(width=0.3,alpha = 0.5)+
-   # ylab("log2CPM")+
-    #scale_x_discrete(labels=c(tg = "KO", SCR = "SCR"))+
-    #ggtitle(plot.title)
-  
-  tmp <- colnames(txi_counts_filtered_byCon)
-  metaSubset_sorted <- metaSubset[match(tmp, metaSubset$samples), ]
-  
-  tmp_log_t <- as.data.frame(t(logCPM_fil))
-  tmp_log_t$samples <- rownames(tmp_log_t)
-  tmp_t_df <- merge(tmp_log_t,metaSubset_sorted, by="samples")
-  tmp_t_df2 <- tmp_t_df %>%
-    select(KO_n,geneKO,Donor)
-  
-  colnames(tmp_t_df2) <- c("log2CPM","geneKO","Donor")
-  
-  stat.test <- tmp_t_df2  %>% 
-    t_test(log2CPM ~ geneKO, paired = TRUE) %>%
-    add_significance()
-  stat.test <- stat.test %>% add_xy_position(x = "geneKO")
-  
-  pairbox <- ggplot(tmp_t_df2, aes(x = geneKO, y = log2CPM, color = geneKO)) +
-    geom_dotplot(binaxis = "y", stackdir = "center",aes(fill=Donor))+
-    geom_boxplot(width = 0.5, alpha = 0.7) +
-    geom_line(aes(group = Donor), color = "gray70", size = 0.4) +  
-    scale_x_discrete(limits = c(SCR, tg)) + # Ordenar SCR e IRF5
-    ylab("log2CPM") +
-    xlab(tgGene) +
-    theme_minimal() +
-    theme(legend.position = "right") +
-    stat_pvalue_manual(stat.test, label = "p.signif", tip.length = 0,label.size = 7) +
-    labs(subtitle = get_test_label(stat.test, detailed = TRUE))
-  
-  return(pairbox)
-  
-}
-
-# GSEA
-
-GSEA <- function(df,FDR_out = 1, GSEA_analysis){
-  
-  # Define required packages
-  data_lib <- c("devtools", "tidyverse", "ggpubr", "ggrepel", "enrichR",
-                "RColorBrewer", "fgsea", "msigdbr","reshape2")
-  
-  # Check and install missing packages
-  missing_libs <- data_lib[!data_lib %in% installed.packages()[, "Package"]]
-  if (length(missing_libs) > 0) {
-    install.packages(missing_libs, dependencies = TRUE)
-  }
-  
-  # Load all packages silently
-  suppressPackageStartupMessages({
-    invisible(lapply(data_lib, require, character.only = TRUE))
-  })
-  
-  # Set seed for reproducibility
-  set.seed(42)
-  
-  gene_list.filtered <- df %>%
-    filter(FDR < FDR_out) # we can filter genes by q_value or FDR and change the threshold here
-  gene_list_raw <- df
-  gene_list <- gene_list.filtered
-  
-  # Ranking genes for the analysis
-  ranking <- setNames(gene_list$Beta, gene_list$geneName)
-  
-  if(GSEA_analysis=="C2"){
-    
-    #download the category db
-    c2_gene_sets = msigdbr(species = "human", category = 'C2')
- 
-    C2.ensembl.ls <- c2_gene_sets %>% 
-      select(gs_name, gene_symbol) %>% 
-      group_by(gs_name) %>% 
-      summarise(all.genes = list(unique(gene_symbol))) %>% 
-      deframe()
-    # performing GSEA analysis
-    gsea.c2 <- fgseaSimple(pathways = C2.ensembl.ls,
-                           stats = ranking,
-                           nperm=10000)
-    fgseaResTidy <- gsea.c2 %>%
-      as_tibble() %>%
-      arrange(desc(NES))
-    
-    # Show in a nice table:
-    fgseaResTidy %>% 
-      dplyr::select(-leadingEdge, -ES) %>% 
-      arrange(padj) %>% 
-      DT::datatable()
-    
-    # boton to show the table
-    
-    # plotting section
-    
-    top_pos <- gsea.c2 %>%
-      filter(padj < 0.1) %>%
-      filter(NES > 0) %>%
-      arrange(desc(NES)) %>%
-      slice_head(n = 10)
-    
-    top_neg <- gsea.c2 %>%
-      filter(padj < 0.1) %>%
-      filter(NES < 0) %>%
-      arrange(NES) %>%
-      slice_head(n = 10)
-    
-    top_combined <- bind_rows(top_pos, top_neg)
-    
-    if(!is_empty(top_combined$pval)){
-      GSEA.C2.name <- paste("~/Documents/SplicingFolder/plots/",tg,"KOvs",SCR,"_",tgCon,tgStim,"_GSEA_C2_topcomb.png",sep = "")
-      ftitle.c2 <- paste("Curate gene sets (C2) enrichment analysis of",tg,"vs",SCR,"in",tgStim,"and",tgCon,sep=" ")
-      gsea.c2.plot <- ggplot(top_combined, aes(reorder(pathway, NES), NES)) +
-        geom_col(aes(fill = ifelse(NES > 0, "NES > 0", "NES < 0")), alpha = 0.8) +
-        scale_fill_manual(values = c("NES > 0" = "#FF7F50", "NES < 0" = "#6495ED"), name = "FDR 5%") +
-        coord_flip() +
-        labs(x = "Pathway", y = "Normalized Enrichment Score",
-             title = ftitle.c2) + 
-        theme_bw() +
-        theme(
-          axis.text.x = element_text(size = 12),
-          axis.text.y = element_text(size = 10),
-          axis.title = element_text(size = 14),
-          legend.position = "top",
-          legend.title = element_text(size = 12),
-          legend.text = element_text(size = 10),
-          plot.title = element_text(hjust = 0.5, size = 16, face = "bold")
-        )
-      ggsave(filename = GSEA.C2.name, plot = gsea.c2.plot ,width = 12, height = 6, dpi = 300)
-      print(gsea.c2.plot)
-    }else{
-      print("empty table")
-    }
-    
-    
-    
-  }else if(GSEA_analysis=="C5"){
-    
-  }else if(GSEA_analysis=="Hallmark"){
-    
-  }
-  
-  return()
-}
-
-GSEA_table <- function(){
-
-}
->>>>>>> f40c6eb162999aea48b4d3f321b5e2bce1953d15
 
 #Feature plot
 
@@ -305,7 +44,62 @@ FeaPlot <- function(geneName, meta, expres_norm) {
   
   return(feaPlot)
 }
-<<<<<<< HEAD
+
+# Function to plot gene expression on UMAP with optional separation by condition
+plot_umap_expression <- function(geneName, meta, expres_norm, split_mode = "Combined") {
+  
+  gene_to_plot <- geneName
+  
+  # Extraer expresión del gen
+  if (!gene_to_plot %in% rownames(expres_norm)) {
+    warning("Gene not found in expression matrix.")
+    return(ggplot() + ggtitle("Gene not found"))
+  }
+  
+  gene_expr <- expres_norm[gene_to_plot, ]
+  
+  # Recortar valores extremos para contraste visual
+  max_cap <- quantile(gene_expr[gene_expr > 0], 0.99, na.rm = TRUE)
+  gene_expr[gene_expr > max_cap] <- max_cap
+  
+  # Reescalar entre 0 y 1
+  gene_expr_scaled <- scales::rescale(gene_expr, to = c(0, 1))
+  
+  # Asegurar que meta$X esté presente y sea índice correcto
+  if (!"X" %in% colnames(meta)) {
+    meta$X <- colnames(exprs_norm)
+  }
+  
+  meta$gene_expr <- gene_expr_scaled[meta$X]
+  
+  # Ordenar metadata para que los puntos con baja expresión (gris) se dibujen primero
+  meta <- meta[order(meta$gene_expr, decreasing = FALSE), ]
+  
+  # Plot
+  p <- ggplot(meta, aes(x = UMAP_1, y = UMAP_2, color = gene_expr)) +
+    geom_point(size = 2) +
+    scale_color_gradientn(colors = c("lightgrey", "red")) +
+    labs(
+      title = paste("Expression of", gene_to_plot),
+      color = "Scaled expression"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 14),
+      axis.title = element_blank(),
+      axis.text = element_blank(),
+      axis.ticks = element_blank(),
+      panel.grid = element_blank()
+    ) +
+    coord_fixed()
+  
+  # Si se seleccionó modo separado, usar facet_wrap
+  if (split_mode == "Separated") {
+    p <- p + facet_wrap(~condition)
+  }
+  
+  return(p)
+}
 
 # Function 1: Individual-level boxplot
 plot_boxplot_expr_individual <- function(gene, group_var, exprs_norm, meta) {
@@ -319,16 +113,18 @@ plot_boxplot_expr_individual <- function(gene, group_var, exprs_norm, meta) {
     summarise(mean_expr = mean(expression, na.rm = TRUE), .groups = "drop")
   
   custom_colors <- c(
-    "CTRL" = "#D8BFD8", "SSc" = "#C3E5C3",
-    "Tn"= "#a9dfbb", "Tcm"= "#6cd0c4", "Treg"= "#fc6daf",
-    "Tem"= "#3faccd", "CTL"= "#ff0000","Temra"= "#ff0000",
-    "0" = "#CDB4DB", "1" = "#F78181", "2" = "#82CFFD", "3" = "#8FCFD1",
-    "4" = "#AEB6BF", "5" = "#F7ACB4", "6" = "#FFB347", "7" = "#7FFFD4",
-    "8" = "#F4D03F", "9" = "#CDB4DB", "10" = "#FFA07A", "11" = "#2ECC71"
+    "0" = "#CDB4DB", "1" = "#F78181", "2" = "#82CFFD", "6" = "#FFB347", "4" = "#AEB6BF",
+    "5" = "#F7ACB4", "7" = "#7FFFD4", "10" = "#FFA07A", "8" = "#F4D03F", "9" = "#F8D5E1",
+    "3" = "#8FCFD1", "11" = "#2ECC71", "CTRL" = "#9932CC", "SSc" = "#228B22",
+    "Tn"= "#a9dfbb", "Tcm"= "#6cd0c4", "Treg"= "#fc6daf", "Tem"= "#3faccd",
+    "Temra"= "#ff0000", "Th17"= '#d7ff55', "Th2"= '#FF9F55', "Thf"= '#559FFF',
+    "Th1_GZMK"= '#55FF9F', "Th1_GZMB"= '#FFC255',"Th22"='#55FF9F',"Th1"='#FFC255'
   )
   
   if (group_var == "cell_type") {
-    df[[group_var]] <- factor(df[[group_var]], levels = c("Tn", "Tcm", "Tem", "CTL", "Treg"))
+    df[[group_var]] <- factor(df[[group_var]], levels = c("Tn", "Tcm", "Tem", "Temra", "Treg"))
+  } else if (group_var == "Th") {
+      df[[group_var]] <- factor(df[[group_var]], levels = c("Tn", "Th1", "Th2", "Th17","Th22", "Thf","Tem", "Temra", "Treg"))
   } else if (group_var == "clusters") {
     df[[group_var]] <- factor(df[[group_var]], levels = as.character(0:11))
   } else if (group_var == "condition") {
@@ -367,7 +163,7 @@ plot_boxplot_expr_grouped <- function(gene, group_var, exprs_norm, meta) {
   
   df <- meta %>%
     mutate(expression = gene_expr[colnames(exprs_norm)]) %>%
-    select(Sample, condition, clusters, cell_type, expression)
+    select(Sample, condition, clusters, cell_type, Th, expression)
   
   group_vars <- c("Sample", group_var)
   if (group_var != "condition") group_vars <- c(group_vars, "condition")
@@ -378,18 +174,20 @@ plot_boxplot_expr_grouped <- function(gene, group_var, exprs_norm, meta) {
   
   df_summary$facet_group <- factor(df_summary[[group_var]],
                                    levels = if (group_var == "cell_type") {
-                                     c("Tn", "Tcm", "Tem", "CTL", "Treg")
+                                     c("Tn", "Tcm", "Tem", "Temra", "Treg")
+                                   } else if (group_var == "Th") {
+                                     c("Tn", "Th1", "Th2", "Th17","Th22", "Thf","Tem", "Temra", "Treg")
                                    } else {
                                      as.character(0:11)
                                    })
   
   custom_colors <- c(
-    "CTRL" = "#D8BFD8", "SSc" = "#C3E5C3",
-    "Tn"= "#a9dfbb", "Tcm"= "#6cd0c4", "Treg"= "#fc6daf",
-    "Tem"= "#3faccd", "CTL"= "#ff0000",
-    "0" = "#CDB4DB", "1" = "#F78181", "2" = "#82CFFD", "3" = "#8FCFD1",
-    "4" = "#AEB6BF", "5" = "#F7ACB4", "6" = "#FFB347", "7" = "#7FFFD4",
-    "8" = "#F4D03F", "9" = "#CDB4DB", "10" = "#FFA07A", "11" = "#2ECC71"
+    "0" = "#CDB4DB", "1" = "#F78181", "2" = "#82CFFD", "6" = "#FFB347", "4" = "#AEB6BF",
+    "5" = "#F7ACB4", "7" = "#7FFFD4", "10" = "#FFA07A", "8" = "#F4D03F", "9" = "#F8D5E1",
+    "3" = "#8FCFD1", "11" = "#2ECC71", "CTRL" = "#9932CC", "SSc" = "#228B22",
+    "Tn"= "#a9dfbb", "Tcm"= "#6cd0c4", "Treg"= "#fc6daf", "Tem"= "#3faccd",
+    "Temra"= "#ff0000", "Th17"= '#d7ff55', "Th2"= '#FF9F55', "Thf"= '#559FFF',
+    "Th1_GZMK"= '#55FF9F', "Th1_GZMB"= '#FFC255',"Th22"='#55FF9F',"Th1"='#FFC255'
   )
   
   p <- ggplot(df_summary, aes(x = condition, y = mean_expr, fill = .data[[group_var]])) +
@@ -413,5 +211,124 @@ plot_boxplot_expr_grouped <- function(gene, group_var, exprs_norm, meta) {
   
   p
 }
-=======
->>>>>>> f40c6eb162999aea48b4d3f321b5e2bce1953d15
+
+# Heatmap ####
+
+#' Scale rows using z-score normalization and clip extreme values
+#' @param x A numeric matrix (genes x samples)
+#' @return Scaled matrix with values capped between -2 and 2
+scale_rows <- function(x) {
+  x_scaled <- t(scale(t(x)))
+  x_scaled[x_scaled > 2] <- 2
+  x_scaled[x_scaled < -2] <- -2
+  return(x_scaled)
+}
+
+#' Compute average expression per sample
+#' @param expr_mat Gene expression matrix (genes x cells)
+#' @param meta_samples Vector of sample IDs per cell (must align with columns of expr_mat)
+#' @param top_genes Vector of gene names to retain
+#' @return Matrix (genes x samples) with averaged expression
+average_by_sample <- function(expr_mat, meta_samples, top_genes) {
+  samples_unique <- unique(meta_samples)
+  exp_ave_mat <- matrix(NA, nrow = length(top_genes), ncol = length(samples_unique))
+  rownames(exp_ave_mat) <- top_genes
+  colnames(exp_ave_mat) <- samples_unique
+  
+  for (i in seq_along(samples_unique)) {
+    sample_id <- samples_unique[i]
+    cells <- which(meta_samples == sample_id)
+    if (length(cells) > 1) {
+      exp_ave_mat[, i] <- rowMeans(expr_mat[, cells, drop = FALSE])
+    } else {
+      exp_ave_mat[, i] <- expr_mat[, cells]
+    }
+  }
+  return(exp_ave_mat)
+}
+
+#' Rename sample columns using a named vector
+#' @param matrix A matrix with sample column names
+#' @param name_map Named vector: names are original sample names, values are new names
+#' @return Matrix with updated column names
+rename_samples <- function(matrix, name_map) {
+  colnames(matrix) <- ifelse(
+    colnames(matrix) %in% names(name_map),
+    name_map[colnames(matrix)],
+    colnames(matrix)
+  )
+  return(matrix)
+}
+
+#' Generate a heatmap-ready matrix from expression and metadata
+#' @param exprs_norm Normalized gene expression matrix (genes x cells)
+#' @param meta Metadata containing Sample column
+#' @param top_genes Vector of genes to plot
+#' @param sample_names Dataframe with columns og and new (original and new sample names)
+#' @return Scaled and renamed heatmap matrix (genes x samples)
+generate_heatmap_matrix <- function(exprs_norm, meta, top_genes, sample_names) {
+  exp_heat <- Matrix::as.matrix(exprs_norm[top_genes, , drop = FALSE])
+  meta_samples <- as.character(meta$Sample)
+  
+  exp_ave_mat <- average_by_sample(exp_heat, meta_samples, top_genes)
+  exp_ave_scale <- scale_rows(exp_ave_mat)
+  
+  name_map <- setNames(sample_names$new, sample_names$og)
+  exp_ave_scale <- rename_samples(exp_ave_scale, name_map)
+  
+  return(exp_ave_scale)
+}
+#
+# UMAP ####
+# Function to generate UMAP plots
+plot_umap <- function(meta, color_by = "clusters", split_mode = "Combined") {
+  color_pal <- c(
+    "0" = "#CDB4DB", "1" = "#F78181", "2" = "#82CFFD", "6" = "#FFB347", "4" = "#AEB6BF",
+    "5" = "#F7ACB4", "7" = "#7FFFD4", "10" = "#FFA07A", "8" = "#F4D03F", "9" = "#F8D5E1",
+    "3" = "#8FCFD1", "11" = "#2ECC71", "CTRL" = "#9932CC", "SSc" = "#228B22",
+    "Tn"= "#a9dfbb", "Tcm"= "#6cd0c4", "Treg"= "#fc6daf", "Tem"= "#3faccd",
+    "Temra"= "#ff0000", "Th17"= '#d7ff55', "Th2"= '#FF9F55', "Thf"= '#559FFF',
+    "Th1_GZMK"= '#55FF9F', "Th1_GZMB"= '#FFC255',"Th22"='#55FF9F',"Th1"='#FFC255'
+  )
+  
+  meta$clusters <- as.character(meta$R09)
+  umap_data <- meta %>% mutate(var_to_plot = .[[color_by]])
+  is_cont <- is.numeric(umap_data$var_to_plot)
+  
+  base_plot <- ggplot(umap_data, aes(x = UMAP_1, y = UMAP_2, color = var_to_plot)) +
+    geom_point(size = 2, alpha = 0.8) +
+    labs(title = paste("UMAP colored by", color_by), color = "") +
+    theme_bw() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+      axis.text = element_blank(), axis.ticks = element_blank(),
+      axis.title = element_text(size = 12),
+      panel.grid = element_blank(), panel.border = element_rect(color = "black", size = 1),
+      legend.position = "right", legend.text = element_text(size = 16)
+    )
+  
+  vars_with_custom_palette <- c("clusters", "condition", "cell_type","Th")
+  
+  if (is_cont) {
+    base_plot <- base_plot + scale_color_viridis_b(option = "plasma", direction = -1, na.value = "grey80")
+  } else if (color_by %in% vars_with_custom_palette) {
+    base_plot <- base_plot + scale_color_manual(values = color_pal, na.value = "grey80")
+  } else {
+    levs <- sort(unique(umap_data$var_to_plot))
+    n_colors <- length(levs)
+    palette <- suppressWarnings(RColorBrewer::brewer.pal(min(max(3, n_colors), 8), "Set2"))
+    if (n_colors > 8) {
+      palette <- colorRampPalette(palette)(n_colors)
+    }
+    base_plot <- base_plot + scale_color_manual(values = setNames(palette, levs), na.value = "grey80")
+  }
+  
+  base_plot <- base_plot + coord_fixed()
+  
+  if (split_mode == "Separated") {
+    base_plot <- base_plot + facet_wrap(~condition)
+  }
+  
+  return(base_plot)
+}
+#

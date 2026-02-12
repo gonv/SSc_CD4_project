@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 #!/usr/bin/env Rscript
 
 # sc info ####
@@ -7,7 +6,7 @@ exprs_norm <- readRDS("data/20260124_SSc_CD4_counts_norm.rds")
 #saveRDS(exprs_norm, file = "data/exprs_norm.rds", compress = "xz")
 #counts <- readRDS("data/exprs_norm.rds")
 
-meta <- read.csv("data/20260124_SSc_CD4_meta.csv")
+meta <- read.csv("data/20260124_SSc_CD4_meta_v2.csv")
 meta$clusters <- as.character(meta$R09)
 meta$cell <- as.character(meta$X)
 IR_V.cols <- colnames(meta[,grep("IR_V*", colnames(meta))])
@@ -31,17 +30,6 @@ clean_dea_CT_name <- function(filename, prefix) {
   basename <- tools::file_path_sans_ext(basename(filename))
   cleaned <- sub("dea_pseudobulk_CT_", "", basename)
 }
-=======
-dea_pb <- read.csv("data/dea_pseudobulk_condition_v5.csv")
-exprs_norm <- readRDS("data/20260124_SSc_CD4_counts_norm.rds")
-meta <- read.csv("data/20260124_SSc_CD4_meta.csv")
-meta$clusters <- as.character(meta$R09)
-
-#save(exprs_norm, meta, )
-
-files_cluster <- list.files("data/dea_pseudobulk/cluster/")
-
->>>>>>> f40c6eb162999aea48b4d3f321b5e2bce1953d15
 
 # 1. Ruta principal
 base_path <- "data/dea_pseudobulk"
@@ -52,39 +40,24 @@ dea_main <- read.csv(file.path(base_path, "dea_pseudobulk_condition_v5.csv"))
 # 3. Leer subcarpeta de cluster
 cluster_files <- list.files(file.path(base_path, "cluster"), pattern = "*.csv", full.names = TRUE)
 cluster_list <- lapply(cluster_files, read.csv)
-<<<<<<< HEAD
 names(cluster_list) <- vapply(cluster_files, clean_dea_name, character(1))
-=======
-names(cluster_list) <- paste0("cluster_", tools::file_path_sans_ext(basename(cluster_files)))
->>>>>>> f40c6eb162999aea48b4d3f321b5e2bce1953d15
 
 # 4. Leer subcarpeta de cell type
 celltype_files <- list.files(file.path(base_path, "cell_type"), pattern = "*.csv", full.names = TRUE)
 celltype_list <- lapply(celltype_files, read.csv)
-<<<<<<< HEAD
 names(celltype_list) <- vapply(celltype_files, clean_dea_CT_name, character(1))
 
 # 5. Combinar todo
-dea_list <- c(
+dea_list_ps <- c(
   Global = list(dea_main),
-=======
-names(celltype_list) <- paste0("celltype_", tools::file_path_sans_ext(basename(celltype_files)))
-
-# 5. Combinar todo
-dea_list <- c(
-  pseudobulk = list(dea_main),
->>>>>>> f40c6eb162999aea48b4d3f321b5e2bce1953d15
   cluster_list,
   celltype_list
 )
 
 # 6. Guardar
-save(dea_list, file = "data/dea_list.RData")
+save(dea_list_ps, file = "data/dea_list_ps.RData")
 
-<<<<<<< HEAD
 # GSEA ####
-=======
->>>>>>> f40c6eb162999aea48b4d3f321b5e2bce1953d15
 
 # 1. Ruta principal
 base_path <- "data/GSEA_TFactivity"
@@ -95,20 +68,16 @@ clean_gsea_name <- function(filename, prefix) {
   cleaned <- sub("^2026-01-\\d{2}_SSc_CD4_GSEA_", "", basename)
 }
 
-<<<<<<< HEAD
 clean_Reactome_name <- function(filename, prefix) {
   basename <- tools::file_path_sans_ext(basename(filename))
   cleaned <- sub("^2026-01-\\d{2}_SSc_CD4_GSEA_", "", basename)
   cleaned <- sub("C2", "Reactome", cleaned)
 }
 
-=======
->>>>>>> f40c6eb162999aea48b4d3f321b5e2bce1953d15
 # 2. Crear las listas con nombres limpios
 
 H_files <- list.files(file.path(base_path, "Hallmark"), pattern = "*.csv", full.names = TRUE)
 H_list <- lapply(H_files, read.csv)
-<<<<<<< HEAD
 gseaHallmark_main <- read.csv("data/GSEA_TFactivity/2026-01-31_SSc_CD4_GSEA_pseudobulk_Hallmark.csv")
 names(H_list) <- vapply(H_files, clean_gsea_name, character(1))
 H_list[["Global_Hallmark"]] <- gseaHallmark_main
@@ -124,23 +93,11 @@ TF_list <- lapply(TF_files, read.csv)
 TF_main <- read.csv("data/GSEA_TFactivity/2026-01-31_SSc_CD4_GSEA_pseudobulk_TFact.csv")
 names(TF_list) <- vapply(TF_files, clean_gsea_name, character(1))
 TF_list[["Global_TFactivity"]] <- TF_main
-=======
-names(H_list) <- vapply(H_files, clean_gsea_name, character(1))
-
-C2_files <- list.files(file.path(base_path, "C2"), pattern = "*.csv", full.names = TRUE)
-C2_list <- lapply(C2_files, read.csv)
-names(C2_list) <- vapply(C2_files, clean_gsea_name, character(1))
-
-TF_files <- list.files(file.path(base_path, "TFactivity"), pattern = "*.csv", full.names = TRUE)
-TF_list <- lapply(TF_files, read.csv)
-names(TF_list) <- vapply(TF_files, clean_gsea_name, character(1))
->>>>>>> f40c6eb162999aea48b4d3f321b5e2bce1953d15
 
 # 3. Combinar todas las listas
 gseaTF_list <- c(H_list, C2_list, TF_list)
 
 
-<<<<<<< HEAD
 # 6. Guardar
 save(gseaTF_list, file = "data/gseaTF_list.RData")
 
@@ -155,7 +112,7 @@ clean_dea_name <- function(filename, prefix) {
 clean_dea_CT_name <- function(filename, prefix) {
   basename <- tools::file_path_sans_ext(basename(filename))
   cleaned <- sub("scRNAseq_SScCD4_", "", basename)
-  cleaned <- sub("_Soskic_DEG_R09_byCON_1500HVG_20PC_it92", "", cleaned)
+  cleaned <- sub("_DEG_R09_byCON_1500HVG_20PC_it92", "", cleaned)
 }
 
 scanpy_to_dea <- function(df) {
@@ -213,15 +170,4 @@ dea_list <- c(
 # 6. Guardar
 save(dea_list, file = "data/dea_list_2.RData")
 
-save(list = c("meta","dea_list","gseaTF_list","exprs_norm"),file = "data/SScCD4_data_v2.RData")
-=======
-# 5. Combinar todo
-gseaTF_list <- c(
-  H_list,
-  C2_list,
-  TF_list
-)
-
-# 6. Guardar
-save(gseaTF_list, file = "data/gseaTF_list.RData")
->>>>>>> f40c6eb162999aea48b4d3f321b5e2bce1953d15
+save(list = c("meta","dea_list","dea_list_ps","gseaTF_list","exprs_norm"),file = "data/SScCD4_data_v2.RData")

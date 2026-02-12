@@ -27,66 +27,56 @@ load("data/SScCD4_data_v2.RData")
 
 
 # Define UI for application that draws a histogram
-ui <- fluidPage(
-  
-  # theme
+ui <- navbarPage(
+  title = tags$div(
+    style = "display: flex; align-items: center; gap: 10px;",
+    tags$img(src = "MainPage/project_logo.png", style = "height:100px; margin-top: -10px; margin-left: -40px; margin-right: -20px;")
+  ),
+  windowTitle = "CD4+ T cells in SSc",
   theme = bslib::bs_theme(version = 4, bootswatch = "litera"),
   
-  # Logos
-  column(
-    12,
-    tags$div(
-      style = "display: flex; justify-content: center; align-items: center; gap: 40px; padding: 10px;",
-      tags$img(src = "MainPage/project_logo.png", style = "height:170px;"),
-      tags$img(src = "MainPage/ipblnlogo.jpg", style = "height:60px;"),
-      tags$img(src = "MainPage/BCH-logo.png", style = "height:70px;"),
-      tags$img(src = "MainPage/Broad-logo.jpeg", style = "height:40px;"),
-      tags$img(src = "MainPage/MGA_logo_v6.png", style = "height:100px;")
-    )
+  # ui Home ####
+  tabPanel("Home",
+           fluidPage(
+             column(
+               12,
+               tags$div(
+                 style = "display: flex; justify-content: center; align-items: center; gap: 40px; padding: 10px;",
+                 tags$img(src = "MainPage/project_logo.png", style = "height:170px;"),
+                 tags$img(src = "MainPage/ipblnlogo.jpg", style = "height:60px;"),
+                 tags$img(src = "MainPage/BCH-logo.png", style = "height:70px;"),
+                 tags$img(src = "MainPage/Broad-logo.jpeg", style = "height:40px;"),
+                 tags$img(src = "MainPage/MGA_logo_v6.png", style = "height:100px;")
+               )
+             ),
+             fluidRow(
+               column(12,
+                      h2("Welcome to the CD4+ T cells in SSc resource"),
+                      br(),
+                      h4("About this app"),
+                      p("This Shiny App provides an interactive exploration of transcriptional signatures in CD4+ T cells from patients with Systemic Sclerosis (SSc). 
+                        It includes differential expression analyses, gene set enrichment results, clustering information, and cell-type specific markers."),
+                      p("For more details, please refer to the preprint:"),
+                      tags$a(href = "https://www.biorxiv.org/content/10.64898/2026.01.03.697349v1", 
+                             "Preprint on bioRxiv", target = "_blank"),
+                      br(),
+                      p("The full code and datasets used to build this application are available at:"),
+                      tags$a(href = "https://github.com/gonv/SSc_CD4_project", 
+                             "GitHub Repository", target = "_blank"),
+                      br(), br(),
+                      h4("Citation"),
+                      p("If you use this resource, please cite:"),
+                      tags$code('Villanueva-Martín G, et al. (2026). Transcriptional landscape of CD4+ T cells in Systemic Sclerosis. bioRxiv.')
+               )
+             )
+           )
   ),
-
-    # Application title
-    #titlePanel("SSc CD4 project"),
-  
-  
- tabsetPanel(
-    
-   # ui Home ####
-   
-   tabPanel("Home",
-            fluidRow(
-              column(12,
-                     h2("Welcome to the CD4+ T cells in SSc resource"),
-                     br(),
-                     
-                     h4("About this app"),
-                     p("This Shiny App provides an interactive exploration of transcriptional signatures in CD4+ T cells from patients with Systemic Sclerosis (SSc). 
-                    It includes differential expression analyses, gene set enrichment results, clustering information, and cell-type specific markers."),
-                     
-                     p("For more details, please refer to the preprint:"),
-                     tags$a(href = "https://www.biorxiv.org/content/10.64898/2026.01.03.697349v1", 
-                            "Preprint on bioRxiv", target = "_blank"),
-                     
-                     br(),
-                     
-                     p("The full code and datasets used to build this application are available at:"),
-                     tags$a(href = "https://github.com/gonv/SSc_CD4_project", 
-                            "GitHub Repository", target = "_blank"),
-                     
-                     br(), br(),
-                     
-                     h4("Citation"),
-                     p("If you use this resource, please cite:"),
-                     tags$code('Villanueva-Martín G, et al. (2026). Transcriptional landscape of CD4+ T cells in Systemic Sclerosis. bioRxiv.')
-              )
-            )
-   ),
    
    # ui demographic ####
    tabPanel("Demographics",
             fluidRow(
               column(12,
-                     h2("Patient Demographics"),
+                     h2("Demographics info"),
                      DT::DTOutput("demographic_table")
               )
             )
@@ -122,38 +112,44 @@ ui <- fluidPage(
     
     # ui Volcano ####
     
-    tabPanel("Volcano Plot",
-             fluidRow(
-               column(12,
-                      tags$div(
-                        style = "padding: 0 15px;",
-                        h4("Volcano plot (Global DEA only)")
-                      )
-               )
-             ),
-             width = 12,
-             sidebarLayout(
-               sidebarPanel(
-                 selectizeInput("genes_heatmap_volcano", 
-                                "Genes to label:",
-                                choices = NULL,
-                                multiple = TRUE,
-                                selected = c("STAT1", "STAT3"),
-                                options = list(maxItems = 50)),
-                 sliderInput("pval_cutoff_volcano", "FDR threshold:", min = 0, max = 1, value = 0.05, step = 0.01),
-                 actionButton("runVolcanoOnly", "Run Volcano Plot")
+  tabPanel("Volcano Plot",
+           sidebarLayout(
+             sidebarPanel(
+               fluidRow(
+                 column(12,
+                        tags$div(
+                          style = "padding: 0 15px;",
+                          h4("Volcano plot (Global DEA only)")
+                        )
+                 )
                ),
-               mainPanel(
-                 plotOutput("volcanoPlot", height = "500px")
+               width = 12, 
+               selectizeInput("genes_heatmap_volcano", 
+                              "Genes to label:",
+                              choices = NULL,
+                              multiple = TRUE,
+                              selected = c("STAT1", "STAT3"),
+                              options = list(maxItems = 50)),
+               sliderInput("pval_cutoff_volcano", "FDR threshold:", min = 0, max = 1, value = 0.05, step = 0.01),
+               actionButton("runVolcanoOnly", "Run Volcano Plot")
+             ),
+             mainPanel(
+               plotOutput("volcanoPlot", height = "500px"),
+               br(),
+               downloadButton("downloadVolcano", "Download Plot"),
+               fluidRow(
+                 column(6, numericInput("plot_width", "Width (inches):", value = 8, min = 4, max = 20)),
+                 column(6, numericInput("plot_height", "Height (inches):", value = 6, min = 4, max = 20))
                )
              )
-    ),
+           )
+  ),
   
     # ui Heatmap ####  
     tabPanel("Heatmap",
              fluidPage(
                fluidRow(
-                 column(6,
+                 column(12,
                         h4("Select Differential expression analysis"),
                         selectInput("dea_source_heatmap", "Select DEA dataset:",
                                     choices = names(dea_list),
@@ -172,51 +168,89 @@ ui <- fluidPage(
                  column(8,
                         div(
                           style = "overflow-x: auto; overflow-y: auto; max-height: 1000px;",
-                          imageOutput("heatmapPlot", width = "100%", height = "auto")
+                          imageOutput("heatmapPlot", width = "100%", height = "auto"),
+                          br(),
+                          downloadButton("downloadHeatmap", "Download Heatmap"),
+                          fluidRow(
+                            column(6, numericInput("heatmap_width", "Width (inches):", value = 8, min = 4, max = 20)),
+                            column(6, numericInput("heatmap_height", "Height (inches):", value = 6, min = 4, max = 20))
+                          )
                         )
                  )
                )
              )
     ),
+  
     
-    #ui UMAP ####
-    
-    
-    tabPanel("UMAP",
-             sidebarLayout(
-               sidebarPanel(width = 12,
-                 selectInput("umap_color_by", "Color by:",
-                             choices = c("clusters", "cell_type", "condition", "Sample",
-                                         "percent_mito"), #"cellType_Th",
-                             selected = "clusters")
-               ),
-               mainPanel(width = 12,
-                 plotOutput("umapPlot", height = "600px")
-               )
+  #ui UMAP ####
+  
+  tabPanel("UMAP",
+           sidebarLayout(
+             sidebarPanel(width = 12,
+                          fluidRow(
+                            column(6,
+                                   selectInput("umap_color_by", "Color by:",
+                                               choices = c("clusters", "cell_type", "Th","condition", "Sample", "percent_mito","umap_density_condition"),
+                                               selected = "clusters")
+                            ),
+                            column(6,
+                                   radioButtons("umap_mode", "UMAP mode:",
+                                                choices = c("Combined", "Separated"),
+                                                selected = "Combined", inline = TRUE)
+                            )
+                          ),
+                          br()
+             ),
+             mainPanel(width = 12,
+                       plotOutput("umapPlot", height = "600px"),
+                       downloadButton("downloadUMAP", "Download UMAP Plot"),
+                       fluidRow(
+                         column(6, numericInput("umap_width", "Width (inches):", value = 8, min = 4, max = 20)),
+                         column(6, numericInput("umap_height", "Height (inches):", value = 6, min = 4, max = 20))
+                       )
              )
-    ),
+           )
+  ),
     
-    
-    #ui UMAP expression#####
-    
-    tabPanel("Gene expression in UMAP",
-             sidebarLayout(
-               sidebarPanel(width = 12,
-                 selectizeInput(
-                   options = list(placeholder = 'Type a gene name...'),
-                   inputId = "gene_umap",
-                   label = "Select gene:",
-                   selected = "CD4",
-                   choices = NULL,
-                   multiple = FALSE
+  #ui UMAP expression#####
+  
+  tabPanel("Gene expression in UMAP",
+           sidebarLayout(
+             sidebarPanel(
+               width = 12,
+               fluidRow(
+                 column(6,
+                        selectizeInput(
+                          inputId = "gene_umap",
+                          label = "Select gene:",
+                          choices = NULL,
+                          selected = "CD4",
+                          multiple = FALSE,
+                          options = list(placeholder = 'Type a gene name...')
+                        )
+                 ),
+                 column(6,
+                        radioButtons(
+                          inputId = "umap_mode_expr", 
+                          label = "UMAP mode:",
+                          choices = c("Combined", "Separated"),
+                          selected = "Combined",
+                          inline = TRUE
+                        )
                  )
-               ),
-               mainPanel(width = 12,
-                 plotOutput("umapPlot_expression", height = "600px")
                )
+             ),
+             mainPanel(width = 12,
+                       plotOutput("umapPlot_expression", height = "600px"),
+                       downloadButton("downloadUMAP", "Download UMAP Plot"),
+                       fluidRow(
+                         column(6, numericInput("umap_width", "Width (inches):", value = 8, min = 4, max = 20)),
+                         column(6, numericInput("umap_height", "Height (inches):", value = 6, min = 4, max = 20))
+                       )
              )
-    ),
-    
+           )
+  ),
+  
 
     #ui Box plot#####
     
@@ -230,7 +264,7 @@ ui <- fluidPage(
                ),
                column(6,
                       selectInput("group_by", "Group by:",
-                                  choices = c("condition", "clusters", "cell_type"),
+                                  choices = c("condition", "clusters", "cell_type","Th"),
                                   selected = "condition")
                )
              ),
@@ -274,12 +308,8 @@ ui <- fluidPage(
     )
     
     
-    ),
-  
-
-  
-  
 )
+
 
 
 # server ####
@@ -306,7 +336,7 @@ server <- function(input, output,session) {
   
   output$demographic_table <- DT::renderDT({
     DT::datatable(demographic_info, 
-                  options = list(pageLength = 10, autoWidth = TRUE),
+                  options = list(pageLength = 16, autoWidth = TRUE),
                   rownames = FALSE)
   })
   
@@ -434,14 +464,65 @@ server <- function(input, output,session) {
         geom_hline(yintercept = fdr_threshold, linetype = "dashed", color = "blue") +
         geom_vline(xintercept = 0, linetype = "dashed", color = "black")
     })
+    
+    output$downloadVolcano <- downloadHandler(
+      filename = function() {
+        paste0("volcano_plot_", Sys.Date(), ".png")
+      },
+      content = function(file) {
+        # Usar los mismos datos que en el renderPlot
+        volcano_data <- dea_list[["Global"]]
+        
+        volcano_data$significance <- case_when(
+          volcano_data$adj.P.Val < input$pval_cutoff_volcano & volcano_data$Estimate > 0 ~ "Upregulated",
+          volcano_data$adj.P.Val < input$pval_cutoff_volcano & volcano_data$Estimate < 0 ~ "Downregulated",
+          TRUE ~ "Not_significant"
+        )
+        
+        volcano_data$delabel <- ifelse(
+          volcano_data$gene %in% input$genes_heatmap_volcano,
+          volcano_data$gene,
+          NA
+        )
+        
+        volcano_data$highlight <- volcano_data$gene %in% input$genes_heatmap_volcano
+        
+        fdr_threshold <- -log10(max(volcano_data$p_value[volcano_data$adj.P.Val <= input$pval_cutoff_volcano], na.rm = TRUE))
+        
+        p <- ggplot(volcano_data, aes(x = Estimate, y = -log10(p_value), label = delabel)) +
+          geom_point(alpha = 0.9, shape = 21, colour = "black", stroke = 0.3, size = 2.5,
+                     aes(fill = significance)) +
+          geom_point(
+            data = filter(volcano_data, highlight),
+            color = "black", fill = "red",
+            alpha = 0.9, shape = 21, stroke = 0.3, size = 6
+          ) +
+          geom_label_repel(data = filter(volcano_data, !is.na(delabel)),
+                           color = "black", max.overlaps = 10, force = 5, size = 6,
+                           show.legend = FALSE) +
+          scale_fill_manual(values = c("Upregulated" = "#F77663",
+                                       "Downregulated" = "#3D799E",
+                                       "Not_significant" = "#f0f0f0")) +
+          geom_hline(yintercept = fdr_threshold, linetype = "dashed", color = "blue") +
+          geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+          labs(x = "Estimate", y = "-log10(p-value)") +
+          theme_minimal() +
+          theme(axis.title = element_text(size = 16),
+                legend.text = element_text(size = 16),
+                legend.title = element_blank())
+        
+        ggsave(file, plot = p,
+               width = input$plot_width,
+               height = input$plot_height,
+               dpi = 300)
+      }
+    )
   })
   
-  #server heatmap #####
+  # server heatmap ####
+  heatmap_matrix <- reactiveVal(NULL)
   
-  #exprs_matrix <- reactive({
-    #readRDS("data/exprs_norm.rds")
-  #})
-  
+  # Update gene choices dynamically based on selected DEA source
   observe({
     req(input$dea_source_heatmap)
     updateSelectizeInput(
@@ -455,169 +536,112 @@ server <- function(input, output,session) {
   observeEvent(input$runHeatmap, {
     req(input$dea_source_heatmap)
     
+    # Retrieve DEA data for selected dataset
     dea_data <- dea_list[[input$dea_source_heatmap]]
     
+    # Select genes to display
     if (length(input$genes_heatmap_only) > 0) {
       top_genes <- input$genes_heatmap_only
     } else {
-      DE_pos <- dea_data %>% filter(adj.P.Val < 0.05, Estimate > 0) %>%
-        arrange(desc(Estimate)) %>% slice_head(n = 20)
-      DE_neg <- dea_data %>% filter(adj.P.Val < 0.05, Estimate < 0) %>%
-        arrange(Estimate) %>% slice_head(n = 20)
+      DE_pos <- dea_data %>%
+        filter(adj.P.Val < 0.05, Estimate > 0) %>%
+        arrange(desc(Estimate)) %>%
+        slice_head(n = 20)
+      DE_neg <- dea_data %>%
+        filter(adj.P.Val < 0.05, Estimate < 0) %>%
+        arrange(Estimate) %>%
+        slice_head(n = 20)
       top_genes <- unique(bind_rows(DE_pos, DE_neg)$gene)
     }
     
-    #expr_mat <- exprs_matrix()
-    exp_heat <- Matrix::as.matrix(exprs_norm[top_genes, , drop = FALSE])
+    # Define sample renaming map
+    new_names <- c("SSc_1","SSc_2","SSc_3","SSc_4","SSc_5","SSc_6","SSc_7","SSc_8",
+                   "CTRL_1","CTRL_2","CTRL_3","CTRL_4","CTRL_5","CTRL_6","CTRL_7","CTRL_8")
+    sample_names <- data.frame(
+      og = unique(meta$Sample),
+      new = new_names
+    )
     
-    # Asegurar que las muestras estén alineadas con la metadata
-    meta_samples <- as.character(meta$Sample)
-    samples_unique <- unique(meta_samples)
+    # Generate heatmap matrix (averaged and scaled)
+    exp_ave_scale <- generate_heatmap_matrix(exprs_norm, meta, top_genes, sample_names)
+    heatmap_matrix(exp_ave_scale)
     
-    # Inicializar matriz de promedio por muestra
-    exp_ave_mat <- matrix(NA, nrow = length(top_genes), ncol = length(samples_unique))
-    rownames(exp_ave_mat) <- top_genes
-    colnames(exp_ave_mat) <- samples_unique
-    
-    # Calcular la media por muestra
-    for (i in seq_along(samples_unique)) {
-      sample_id <- samples_unique[i]
-      cells <- which(meta_samples == sample_id)
-      if (length(cells) > 1) {
-        exp_ave_mat[, i] <- rowMeans(exp_heat[, cells, drop = FALSE])
-      } else {
-        exp_ave_mat[, i] <- exp_heat[, cells]
-      }
-    }
-    
-    # Z-score row scaling
-    scale_rows <- function(x) t(scale(t(x)))
-    exp_ave_scale <- scale_rows(exp_ave_mat)
-    exp_ave_scale[exp_ave_scale > 2] <- 2
-    exp_ave_scale[exp_ave_scale < -2] <- -2
-    
+    # Render heatmap as image
     output$heatmapPlot <- renderImage({
       outfile <- tempfile(fileext = ".png")
       png(outfile, width = 1200, height = 900, res = 150)
-      pheatmap::pheatmap(exp_ave_scale,
-                         cluster_rows = FALSE,
-                         cluster_cols = TRUE,
-                         show_rownames = TRUE,
-                         show_colnames = TRUE,
-                         fontsize_col = 10,
-                         angle_col = 45,
-                         treeheight_row = 0,
-                         treeheight_col = 0,
-                         fontsize = 12,
-                         border_color = "white")
+      pheatmap::pheatmap(
+        exp_ave_scale,
+        cluster_rows = FALSE,
+        cluster_cols = FALSE,
+        show_rownames = TRUE,
+        show_colnames = TRUE,
+        fontsize_col = 10,
+        angle_col = 45,
+        treeheight_row = 0,
+        treeheight_col = 0,
+        fontsize = 12,
+        border_color = "white"
+      )
       dev.off()
       list(src = outfile, contentType = "image/png", width = "100%", height = "auto", alt = "Heatmap")
     }, deleteFile = TRUE)
+    
+    # Download button logic
+    output$downloadHeatmap <- downloadHandler(
+      filename = function() {
+        paste0("heatmap_", Sys.Date(), ".png")
+      },
+      content = function(file) {
+        req(heatmap_matrix())
+        
+        dpi <- 300
+        png(
+          file,
+          width  = input$heatmap_width  * dpi,
+          height = input$heatmap_height * dpi,
+          res = dpi
+        )
+        pheatmap::pheatmap(
+          heatmap_matrix(),
+          cluster_rows = FALSE,
+          cluster_cols = TRUE,
+          show_rownames = TRUE,
+          show_colnames = TRUE,
+          fontsize_col = 10,
+          angle_col = 45,
+          treeheight_row = 0,
+          treeheight_col = 0,
+          fontsize = 12,
+          border_color = "white"
+        )
+        dev.off()
+      }
+    )
   })
   
   #server UMAPs#####
 
-  
-  
   output$umapPlot <- renderPlot({
-    
-    # Variable seleccionada para colorear
-    var_color <- input$umap_color_by
-    
-    color_pal <- c(
-      "0" = "#CDB4DB",
-      "1" = "#F78181",
-      "2" = "#82CFFD",
-      "6" = "#FFB347",
-      "4" = "#AEB6BF",
-      "5" = "#F7ACB4",
-      "7" = "#7FFFD4",
-      "10" = "#FFA07A",
-      "8" = "#F4D03F",
-      "9" = "#CDB4DB",
-      "3" = "#8FCFD1",
-      "11" = "#2ECC71",
-      "CTRL" = "#9932CC",
-      "SSc" = "#228B22",
-      "Tn"= "#a9dfbb",
-      "Tcm"= "#6cd0c4",
-      "Treg"= "#fc6daf",
-      "Tem"= "#3faccd",
-      "CTL"= "#ff0000",
-      "Th17"= '#FF55A3',
-      "Th2L"= '#FF9F55',
-      "Thf"= '#559FFF',
-      "Th1_GZMK"= '#55FF9F',
-      "Th1_GZMB"= '#FFC255'
-    )
-    
-    meta$clusters <- as.character(meta$R09)
-    
-    umap_data <- meta %>%
-      mutate(var_to_plot = .[[var_color]])  # crea columna auxiliar para aes
-    
-    # Determinar si es variable continua
-    is_cont <- is.numeric(umap_data$var_to_plot)
-    
-    p <- ggplot(umap_data, aes(x = UMAP_1, y = UMAP_2, color = var_to_plot)) +
-      geom_point(size = 2, alpha = 0.8) +
-      labs(title = paste("UMAP colored by", var_color), color = "") +
-      theme_bw() +
-      theme(
-        plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
-        axis.text = element_blank(),
-        axis.title = element_text(size = 12),
-        axis.ticks = element_blank(),
-        panel.grid = element_blank(),
-        panel.border = element_rect(color = "black", size = 1),
-        legend.position = "right",
-        legend.text = element_text(size = 10)
-      )
-    
-    vars_with_custom_palette <- c("clusters", "condition", "cell_type","cell_type_Th")
-    
-    if (is_cont) {
-      
-      p <- p + scale_color_viridis_b(
-        option = "plasma",
-        direction = -1,
-        na.value = "grey80"
-      )
-      
-    } else {
-      
-      if (var_color %in% vars_with_custom_palette) {
-        
-        # Usar paleta definida por el usuario
-        p <- p + scale_color_manual(
-          values = color_pal,
-          na.value = "grey80"
-        )
-        
-      } else {
-        
-        # Paleta discreta automática (fallback)
-        levs <- sort(unique(umap_data$var_to_plot))
-        n_colors <- length(levs)
-        
-        palette <- suppressWarnings(
-          RColorBrewer::brewer.pal(min(max(3, n_colors), 8), "Set2")
-        )
-        
-        if (n_colors > 8) {
-          palette <- colorRampPalette(palette)(n_colors)
-        }
-        
-        p <- p + scale_color_manual(
-          values = setNames(palette, levs),
-          na.value = "grey80"
-        )
-      }
-    }
-    
-    p <- p + coord_fixed() 
-    p
+    req(input$umap_color_by, input$umap_mode)
+    plot_umap(meta, color_by = input$umap_color_by, split_mode = input$umap_mode)
   })
+  
+  output$downloadUMAP <- downloadHandler(
+    filename = function() {
+      paste0("UMAP_", input$umap_color_by, "_", input$umap_mode, "_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      dpi <- 300
+      ggsave(file,
+             plot = plot_umap(meta, color_by = input$umap_color_by, split_mode = input$umap_mode),
+             width = input$umap_width,
+             height = input$umap_height,
+             units = "in",
+             dpi = dpi
+      )
+    }
+  )
 
   
   #server UMAPs gene expr#####
@@ -627,19 +651,44 @@ server <- function(input, output,session) {
       session,
       inputId = "gene_umap",
       choices = rownames(exprs_norm),
+      selected = "CD4",
       server = TRUE
     )
   })
   
+  observe({
+    print(paste("Current mode:", input$umap_mode))
+  })
+  
   output$umapPlot_expression <- renderPlot({
-    req(input$gene_umap)
-    FeaPlot(
+    req(input$gene_umap, input$umap_mode_expr)
+    
+    plot_umap_expression(
       geneName = input$gene_umap,
       meta = meta,
-      expres_norm = exprs_norm
+      expres_norm = exprs_norm,
+      split_mode = input$umap_mode_expr
     )
   })
   
+  output$downloadUMAP <- downloadHandler(
+    filename = function() {
+      paste0("UMAP_Expression_", input$gene_umap, "_", input$umap_mode_expr, "_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      ggsave(file,
+             plot = plot_umap_expression(
+               geneName = input$gene_umap,
+               meta = meta,
+               expres_norm = exprs_norm,
+               split_mode = input$umap_mode_expr
+             ),
+             width = input$umap_width,
+             height = input$umap_height,
+             units = "in",
+             dpi = 300)
+    }
+  )
   
   #server Boxplot expr#####
   
