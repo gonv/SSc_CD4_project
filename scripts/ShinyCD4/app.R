@@ -20,6 +20,7 @@ library("bslib")
 library("rstatix")
 library("enrichR")
 library("Seurat")
+library("ggh4x")
 set.seed(42)
 
 source("functions/functionsShiny.R")
@@ -30,7 +31,7 @@ load("data/SScCD4_data_v2.RData")
 ui <- navbarPage(
   title = tags$div(
     style = "display: flex; align-items: center; gap: 10px;",
-    tags$img(src = "MainPage/project_logo.png", style = "height:100px; margin-top: -10px; margin-left: -40px; margin-right: -20px;")
+    #tags$img(src = "MainPage/project_logo.png", style = "height:50px; margin-top: -10px; margin-left: -40px; margin-right: -20px;")
   ),
   windowTitle = "CD4+ T cells in SSc",
   theme = bslib::bs_theme(version = 4, bootswatch = "litera"),
@@ -190,7 +191,18 @@ ui <- navbarPage(
                           fluidRow(
                             column(6,
                                    selectInput("umap_color_by", "Color by:",
-                                               choices = c("clusters", "cell_type", "Th","condition", "Sample", "percent_mito","umap_density_condition"),
+                                               choices = c(
+                                                 "Clusters" = "clusters",
+                                                 "Cell type annotation"="cell_type",
+                                                 "T helper annotation"= "Th",
+                                                 "Treg annotation" = "ct_Treg",
+                                                 "Subclustering annotatition"="ct_sub",
+                                                 "SSc vs CTRL"= "condition",
+                                                 "samples"= "Sample",
+                                                 "Percentage of Mitochondrial content"= "percent_mito",
+                                                 "Cell density"= "umap_density_condition",
+                                                 "Clonotype expansion" = "cc_aa_size"
+                                                           ),
                                                selected = "clusters")
                             ),
                             column(6,
@@ -264,20 +276,82 @@ ui <- navbarPage(
                ),
                column(6,
                       selectInput("group_by", "Group by:",
-                                  choices = c("condition", "clusters", "cell_type","Th"),
-                                  selected = "condition")
+                                  choices = c(
+                                    "Clusters" = "clusters", 
+                                    "Cell type annotation"="cell_type",
+                                    "T helper annotation"= "Th",
+                                    "SSc vs CTRL"= "condition",
+                                    "Treg annotation" = "ct_Treg",
+                                    "Subclustering annotatition"="ct_sub"
+                                    ),
+                                  selected = "clusters")
                )
              ),
              fluidRow(
+               style = "margin-bottom: 40px;",
                column(12, h4("Per-sample expression boxplot")),
-               column(12, plotOutput("boxplot_expr_individual",height = "200px"))
+               column(12, plotOutput("boxplot_expr_individual", height = "200px"))
              ),
              fluidRow(
                column(12, h4("Grouped boxplot (per group + condition)")),
                column(12, plotOutput("boxplot_expr_grouped",height = "600px"))
              )
     ),
-    
+  # ui dotplot ####
+  tabPanel("Gene Expression Dotplot",
+           sidebarLayout(
+             sidebarPanel(width = 12,
+                          selectizeInput(
+                            inputId = "genes_dotplot",
+                            label = "Select genes:",
+                            choices = NULL,
+                            multiple = TRUE,
+                            options = list(placeholder = 'Type gene names...'),
+                            selected = c("CD4","CCR7","SELL","KLRB1","S100A4","CCL5","GZMB","FOXP3")
+                          ),
+                          selectInput(
+                            inputId = "dotplot_group_by",
+                            label = "Group by:",
+                            choices = c(
+                              "Clusters" = "clusters", 
+                              "Cell type annotation"="cell_type",
+                              "T helper annotation"= "Th",
+                              "SSc vs CTRL"= "condition",
+                              "Treg annotation" = "ct_Treg",
+                              "Subclustering annotatition"="ct_sub"
+                              ),
+                            selected = "clusters"
+                          ),
+                          
+                          radioButtons(
+                            inputId = "dotplot_mode",
+                            label = "Mode:",
+                            choices = c("Combined", "Separated"),
+                            selected = "Combined",
+                            inline = TRUE
+                          ),
+                          
+                          br(),
+                          downloadButton("downloadDotplot", "Download Dotplot"),
+                          
+                          fluidRow(
+                            column(6,
+                                   numericInput("dotplot_width", "Width (inches):",
+                                                value = 8, min = 4, max = 20)
+                            ),
+                            column(6,
+                                   numericInput("dotplot_height", "Height (inches):",
+                                                value = 6, min = 4, max = 20)
+                            )
+                          )
+             ),
+             
+             mainPanel(
+               plotOutput("dotplotPlot", height = "400px")
+             )
+           )
+  ),  
+  
     # ui GSEA ####
     tabPanel("GSEA",
              fluidRow(
@@ -306,6 +380,7 @@ ui <- navbarPage(
                )
              )
     )
+  
     
     
 )
@@ -720,6 +795,61 @@ server <- function(input, output,session) {
       meta = meta
     )
   })
+  
+  
+# server dotplot ####
+  
+  observe({
+    updateSelectizeInput(
+      session,
+      inputId = "genes_dotplot",
+      choices = rownames(exprs_norm),
+      selected = intersect(
+        c("CD4","CCR7","SELL","KLRB1","S100A4","CCL5","GZMB","FOXP3"),
+        rownames(exprs_norm)
+      ),
+      server = TRUE
+    )
+  })
+  
+  # Render dotplot
+  output$dotplotPlot <- renderPlot({
+    
+    req(input$genes_dotplot,
+        input$dotplot_group_by,
+        input$dotplot_mode)
+    
+    plot_cluster_dotplot(
+      expr_mat = exprs_norm,
+      metadata = meta,
+      marker_genes = input$genes_dotplot,
+      cluster_col = input$dotplot_group_by,
+      split_mode = input$dotplot_mode
+    )
+  })
+  
+  # Download handler
+  output$downloadDotplot <- downloadHandler(
+    filename = function() {
+      paste0("Dotplot_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      ggsave(
+        file,
+        plot = plot_cluster_dotplot(
+          expr_mat = exprs_norm,
+          metadata = meta,
+          marker_genes = input$genes_dotplot,
+          cluster_col = input$dotplot_group_by,
+          split_mode = input$dotplot_mode
+        ),
+        width = input$dotplot_width,
+        height = input$dotplot_height,
+        units = "in",
+        dpi = 300
+      )
+    }
+  )
   
   # server GSEA ####
   gsea_names_filtered <- reactive({

@@ -167,7 +167,55 @@ dea_list <- c(
   dea_ct
 )
 
-# 6. Guardar
+# Tregs meta ----
+meta_th <- read_csv("../data/SSc_CD4_annotTreg_metadata_with_umap.csv")
+meta_th$cell <- meta_th$...1
+meta_th_fil <- meta_th %>% 
+  select(cell,ct_Treg)
+
+meta_j <- full_join(meta, meta_th_fil)
+
+meta_j <- meta_j %>% 
+  mutate(
+    ct_sub = case_when(
+      is.na(ct_Treg) ~ Th,
+      TRUE ~ ct_Treg
+    ),
+    ct_Treg = case_when(
+      is.na(ct_Treg) ~ cell_type,
+      TRUE ~ ct_Treg
+      )
+  )
+
+meta <- meta_j
+
+# Clones meta ----
+meta_cc <- read_csv("../data/SSc_CD4_meta_TCR.csv")
+meta_cc$cell <- meta_cc$cell_id
+meta_cc_fil <- meta_cc %>% 
+  select(cell,cc_aa,cc_aa_size)
+
+meta_j <- full_join(meta, meta_cc_fil)
+
+meta_j <- meta_j %>% 
+  mutate(
+    cc_aa_size = case_when(
+      is.na(cc_aa_size) ~ 0,
+      TRUE ~ cc_aa_size
+    ),
+    cc_aa = case_when(
+      is.na(cc_aa) ~ 0,
+      TRUE ~ cc_aa
+    )
+  )
+
+meta <- meta_j
+
+
+
+# Save ----
 save(dea_list, file = "data/dea_list_2.RData")
 
 save(list = c("meta","dea_list","dea_list_ps","gseaTF_list","exprs_norm"),file = "data/SScCD4_data_v2.RData")
+
+
