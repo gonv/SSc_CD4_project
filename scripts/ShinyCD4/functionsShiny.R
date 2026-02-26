@@ -190,38 +190,6 @@ plot_boxplot_expr_grouped <- function(gene, group_var, exprs_norm, meta) {
   gene_expr <- as.numeric(Matrix::as.matrix(exprs_norm[gene, , drop = FALSE]))
   names(gene_expr) <- colnames(exprs_norm)
   
-  df <- meta %>%
-    mutate(expression = gene_expr[colnames(exprs_norm)]) %>%
-    select(Sample, condition, clusters, cell_type, Th, ct_Treg, ct_sub, expression)
-  
-  group_vars <- c("Sample", group_var)
-  if (group_var != "condition") group_vars <- c(group_vars, "condition")
-  
-  df_summary <- df %>%
-    group_by(across(all_of(group_vars))) %>%
-    summarise(mean_expr = mean(expression, na.rm = TRUE), .groups = "drop")
-  
-  df_summary$facet_group <- factor(df_summary[[group_var]],
-                                   levels = if (group_var == "cell_type") {
-                                     c("Tn", "Tcm", "Tem", "Temra", "Treg")
-                                     #annot <- "Cell type annotation"
-                                   } else if (group_var == "Th") {
-                                     c("Tn", "Th1", "Th2", "Th17","Th22", "Thf","Tem", "Temra", "Treg")
-                                     #annot <- "Cell type T helper annotation"
-                                   } else if (group_var == "ct_Treg") {
-                                     c("Tn", "Tcm","Tem", "Temra", "nTreg","iTreg","eTreg")
-                                     #annot <- "Cell type Treg annotation"
-                                   } else if (group_var == "ct_sub") {
-                                     c("Tn", "Th1", "Th2", "Th17","Th22", "Thf","Tem", "Temra", "nTreg","iTreg","eTreg")
-                                     #annot <- "Cell type sublcustering annotation"
-                                   } else if (group_var == "clusters"){
-                                     as.character(0:11)
-                                     #annot <- "Clusters"
-                                   } else {
-                                     c("CTRL","SSc")
-                                     #annot <- "SSc vs CTRL"
-                                   })
-  
   custom_colors <- c(
     "0" = "#CDB4DB", 
     "1" = "#F78181", 
@@ -254,6 +222,39 @@ plot_boxplot_expr_grouped <- function(gene, group_var, exprs_norm, meta) {
     "eTreg" ="#B22222"
   )
   
+  df <- meta %>%
+    mutate(expression = gene_expr[colnames(exprs_norm)]) %>%
+    select(Sample, condition, clusters, cell_type, Th, ct_Treg, ct_sub, expression)
+  
+  group_vars <- c("Sample", group_var)
+  if (group_var != "condition") group_vars <- c(group_vars, "condition")
+  
+  df_summary <- df %>%
+    group_by(across(all_of(group_vars))) %>%
+    summarise(mean_expr = mean(expression, na.rm = TRUE), .groups = "drop")
+  
+  df_summary$facet_group <- factor(df_summary[[group_var]],
+                                   levels = if (group_var == "cell_type") {
+                                     c("Tn", "Tcm", "Tem", "Temra", "Treg")
+                                     #annot <- "Cell type annotation"
+                                   } else if (group_var == "Th") {
+                                     c("Tn", "Th1", "Th2", "Th17","Th22", "Thf","Tem", "Temra", "Treg")
+                                     #annot <- "Cell type T helper annotation"
+                                   } else if (group_var == "ct_Treg") {
+                                     c("Tn", "Tcm","Tem", "Temra", "nTreg","iTreg","eTreg")
+                                     #annot <- "Cell type Treg annotation"
+                                   } else if (group_var == "ct_sub") {
+                                     c("Tn", "Th1", "Th2", "Th17","Th22", "Thf","Tem", "Temra", "nTreg","iTreg","eTreg")
+                                     #annot <- "Cell type sublcustering annotation"
+                                   } else if (group_var == "clusters"){
+                                     as.character(0:11)
+                                     #annot <- "Clusters"
+                                   } else {
+                                     c("CTRL","SSc")
+                                     #annot <- "SSc vs CTRL"
+                                   })
+
+  
   p <- ggplot(df_summary, aes(x = condition, y = mean_expr, fill = .data[[group_var]])) +
     geom_boxplot(width = 0.5, alpha = 0.75, outlier.shape = NA) +
     geom_point(alpha = 0.9, shape = 21, colour = "black", stroke = 0.3,
@@ -267,7 +268,7 @@ plot_boxplot_expr_grouped <- function(gene, group_var, exprs_norm, meta) {
     theme(legend.position = "none",
           axis.text.x = element_text(size = 12, face = "bold", angle = 45, hjust = 1),
           axis.text.y = element_text(size = 12),
-          axis.title.y = element_text(size = 20),
+          axis.title.y = element_blank(),
           title = element_text(size = 18),
           plot.margin = unit(c(1, 1, 1, 1), "mm"))
   
@@ -614,4 +615,102 @@ plot_cluster_dotplot <- function(expr_mat,
   
   return(p)
 }
+#
+# Demographic ----
+generate_demographic_summary <- function(demo_df) {
+  
+  n_total <- nrow(demo_df)
+  
+  # Sex
+  n_female <- sum(demo_df$Sex == "Female", na.rm = TRUE)
+  pct_female <- round(n_female / n_total * 100, 1)
+  
+  # Age
+  age_mean <- round(mean(demo_df$Age, na.rm = TRUE), 1)
+  age_sd   <- round(sd(demo_df$Age, na.rm = TRUE), 1)
+  
+  summary_list <- list(
+    data.frame(
+      Variable = "N patients",
+      Value = as.character(n_total)
+    ),
+    data.frame(
+      Variable = "Female (%)",
+      Value = paste0(n_female, " (", pct_female, "%)")
+    ),
+    data.frame(
+      Variable = "Age (mean ± SD)",
+      Value = paste0(age_mean, " ± ", age_sd)
+    )
+  )
+  
+  clinical_cols <- setdiff(colnames(demo_df),
+                           c("Sample", "Sex", "Age"))
+  
+  clinical_summary <- lapply(clinical_cols, function(col) {
+    
+    values <- demo_df[[col]]
+    
+    n_pos <- sum(toupper(values) == "YES", na.rm = TRUE)
+    n_valid <- sum(toupper(values) %in% c("YES", "NO"))
+    
+    pct <- ifelse(n_valid > 0,
+                  round(n_pos / n_valid * 100, 1),
+                  NA)
+    
+    data.frame(
+      Variable = col,
+      Value = ifelse(is.na(pct),
+                     paste0(n_pos),
+                     paste0(n_pos, " (", pct, "%)"))
+    )
+  })
+  
+  summary_df <- dplyr::bind_rows(summary_list,
+                                 dplyr::bind_rows(clinical_summary))
+  
+  return(summary_df)
+}
+
+plot_demographic_barplot <- function(demo_df) {
+  
+  clinical_cols <- setdiff(colnames(demo_df),
+                           c("Sample", "Sex", "Age"))
+  
+  df_plot <- lapply(clinical_cols, function(col) {
+    
+    values <- toupper(demo_df[[col]])
+    
+    n_valid <- sum(values %in% c("YES", "NO"))
+    n_pos   <- sum(values == "YES", na.rm = TRUE)
+    
+    pct <- ifelse(n_valid > 0,
+                  n_pos / n_valid * 100,
+                  NA)
+    
+    data.frame(
+      Variable = col,
+      Percentage = pct
+    )
+    
+  }) |> dplyr::bind_rows()
+  
+  df_plot <- df_plot |>
+    dplyr::filter(!is.na(Percentage)) |>
+    dplyr::arrange(Percentage)
+  
+  ggplot(df_plot,
+         aes(x = Percentage,
+             y = reorder(Variable, Percentage))) +
+    geom_col(fill = "#2c7fb8") +
+    labs(x = "Percentage of patients (%)",
+         y = "",
+         title = "Clinical characteristics of the SSc cohort") +
+    theme_bw(base_size = 13) +
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      panel.grid = element_blank()
+    )
+}
+
 #

@@ -67,21 +67,35 @@ ui <- navbarPage(
                       br(), br(),
                       h4("Citation"),
                       p("If you use this resource, please cite:"),
-                      tags$code('Villanueva-Martín G, et al. (2026). Transcriptional landscape of CD4+ T cells in Systemic Sclerosis. bioRxiv.')
+                      tags$code('Villanueva-Martin G, et al. (2026). Transcriptional landscape of CD4+ T cells in Systemic Sclerosis. bioRxiv.')
                )
              )
            )
   ),
    
    # ui demographic ####
-   tabPanel("Demographics",
-            fluidRow(
-              column(12,
-                     h2("Demographics info"),
-                     DT::DTOutput("demographic_table")
-              )
-            )
-   ),
+  tabPanel("Cohort Characteristics",
+           
+           fluidRow(
+             column(12,
+                    h4("Cohort summary")
+             )
+           ),
+           
+           fluidRow(
+             column(12,
+                    DTOutput("demographic_summary_table")
+             )
+           ),
+           
+           br(),
+           
+           fluidRow(
+             column(12,
+                    plotOutput("demographic_barplot", height = "400px")
+             )
+           )
+  ),
     
     #ui Table####
     tabPanel("Differential Expression analysis",
@@ -405,14 +419,22 @@ server <- function(input, output,session) {
   })
   
 
-  demographic_info <- read.delim("data/demographic_info.txt", sep = "\t", header = TRUE)
+
   
   # server demographic ####
+  demographic_info <- read.delim("data/demographic_info.txt", sep = "\t", header = TRUE)
   
-  output$demographic_table <- DT::renderDT({
-    DT::datatable(demographic_info, 
-                  options = list(pageLength = 16, autoWidth = TRUE),
-                  rownames = FALSE)
+  output$demographic_summary_table <- renderDT({
+    
+    summary_df <- generate_demographic_summary(demographic_info)
+    
+    datatable(summary_df,
+              options = list(dom = 't'),
+              rownames = FALSE)
+  })
+  
+  output$demographic_barplot <- renderPlot({
+    plot_demographic_barplot(demographic_info)
   })
   
   #server Table#####
