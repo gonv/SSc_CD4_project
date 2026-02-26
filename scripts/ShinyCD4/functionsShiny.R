@@ -599,7 +599,7 @@ plot_cluster_dotplot <- function(expr_mat,
       axis.text.x = element_text(angle = 45, hjust = 1, size = 12,face = "bold"),
       axis.text.y = element_text(size = 12,face = "bold"),
       axis.title.x = element_blank(),
-      axis.title.x = element_blank()
+      axis.title.y = element_blank()
     ) +
     labs(
       title = paste0("Dotplot grouped by ", annot),
