@@ -210,7 +210,7 @@ ui <- navbarPage(
                                                  "Cell type annotation"="cell_type",
                                                  "T helper annotation"= "Th",
                                                  "Treg annotation" = "ct_Treg",
-                                                 "Subclustering annotatition"="ct_sub",
+                                                 "Subclustering annotation"="ct_sub",
                                                  "SSc vs CTRL"= "condition",
                                                  "samples"= "Sample",
                                                  "Percentage of Mitochondrial content"= "percent_mito",
@@ -296,14 +296,14 @@ ui <- navbarPage(
                                     "T helper annotation"= "Th",
                                     "SSc vs CTRL"= "condition",
                                     "Treg annotation" = "ct_Treg",
-                                    "Subclustering annotatition"="ct_sub"
+                                    "Subclustering annotation"="ct_sub"
                                     ),
                                   selected = "clusters")
                )
              ),
              fluidRow(
                style = "margin-bottom: 40px;",
-               column(12, h4("Per-sample expression boxplot")),
+               column(12, h4("Expression boxplot")),
                column(12, plotOutput("boxplot_expr_individual", height = "200px"))
              ),
              fluidRow(
@@ -332,7 +332,7 @@ ui <- navbarPage(
                               "T helper annotation"= "Th",
                               "SSc vs CTRL"= "condition",
                               "Treg annotation" = "ct_Treg",
-                              "Subclustering annotatition"="ct_sub"
+                              "Subclustering annotation"="ct_sub"
                               ),
                             selected = "clusters"
                           ),
@@ -631,15 +631,35 @@ server <- function(input, output,session) {
   })
   
   observeEvent(input$runHeatmap, {
+    
     req(input$dea_source_heatmap)
     
-    # Retrieve DEA data for selected dataset
+    # Retrieve DEA table (still a data.frame)
     dea_data <- dea_list[[input$dea_source_heatmap]]
+    
+    # Infer filtering strategy from DEA name
+    filter_info <- infer_heatmap_filter(input$dea_source_heatmap)
+    
+    # Ensure clusters column exists as character
+    meta$clusters <- as.character(meta$R09)
+    
+    # Apply metadata filtering if needed
+    if (!is.null(filter_info$group_var)) {
+      
+      meta_filtered <- meta %>%
+        dplyr::filter(.data[[filter_info$group_var]] ==
+                        filter_info$group_level)
+    } else {
+      meta_filtered <- meta
+    }
+    
+    # Stop if no cells remain after filtering
+    req(nrow(meta_filtered) > 0)
     
     # Select genes to display
     if (length(input$genes_heatmap_only) > 0) {
       top_genes <- input$genes_heatmap_only
-    } else {
+    } else if(input$dea_source_heatmap == "Global"){
       DE_pos <- dea_data %>%
         filter(adj.P.Val < 0.05, Estimate > 0) %>%
         arrange(desc(Estimate)) %>%
@@ -647,6 +667,16 @@ server <- function(input, output,session) {
       DE_neg <- dea_data %>%
         filter(adj.P.Val < 0.05, Estimate < 0) %>%
         arrange(Estimate) %>%
+        slice_head(n = 20)
+      top_genes <- unique(bind_rows(DE_pos, DE_neg)$gene)
+    } else {
+      DE_pos <- dea_data %>%
+        filter(padj < 0.05, zscore > 0) %>%
+        arrange(desc(zscore)) %>%
+        slice_head(n = 20)
+      DE_neg <- dea_data %>%
+        filter(padj < 0.05, zscore < 0) %>%
+        arrange(zscore) %>%
         slice_head(n = 20)
       top_genes <- unique(bind_rows(DE_pos, DE_neg)$gene)
     }
@@ -660,7 +690,10 @@ server <- function(input, output,session) {
     )
     
     # Generate heatmap matrix (averaged and scaled)
-    exp_ave_scale <- generate_heatmap_matrix(exprs_norm, meta, top_genes, sample_names)
+    exp_ave_scale <- generate_heatmap_matrix(exprs_norm,
+                                             meta_filtered,
+                                             top_genes,
+                                             sample_names)
     heatmap_matrix(exp_ave_scale)
     
     # Render heatmap as image

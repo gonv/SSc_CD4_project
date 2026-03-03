@@ -280,6 +280,53 @@ plot_boxplot_expr_grouped <- function(gene, group_var, exprs_norm, meta) {
 }
 
 # Heatmap ####
+#' Infer metadata filtering rules from DEA dataset name
+#' @param dea_name Character string with DEA dataset name
+#' @return List with group_var and group_level
+infer_heatmap_filter <- function(dea_name) {
+  
+  nm <- as.character(dea_name)
+  nm_clean <- gsub("\\s+", "", nm)  # remove spaces
+  
+  # Global / no filtering
+  if (tolower(nm_clean) %in% c("global", "all", "overall")) {
+    return(list(group_var = NULL, group_level = NULL))
+  }
+  
+  # Cluster pattern (e.g., Cluster0, clusters_3, cluster-5)
+  if (grepl("cluster", nm_clean, ignore.case = TRUE)) {
+    cl_num <- sub(".*?([0-9]+)$", "\\1", nm_clean)
+    return(list(group_var = "clusters",
+                group_level = as.character(cl_num)))
+  }
+  
+  # Condition
+  if (nm_clean %in% c("CTRL", "SSc")) {
+    return(list(group_var = "condition",
+                group_level = nm_clean))
+  }
+  
+  # Cell type annotation
+  if (nm_clean %in% c("Tn","Tcm","Tem","Temra","Treg")) {
+    return(list(group_var = "cell_type",
+                group_level = nm_clean))
+  }
+  
+  # T helper annotation
+  if (nm_clean %in% c("Th1","Th2","Th17","Th22","Thf")) {
+    return(list(group_var = "Th",
+                group_level = nm_clean))
+  }
+  
+  # Treg subtype annotation
+  if (nm_clean %in% c("nTreg","iTreg","eTreg")) {
+    return(list(group_var = "ct_Treg",
+                group_level = nm_clean))
+  }
+  
+  # Fallback: no filtering
+  return(list(group_var = NULL, group_level = NULL))
+}
 
 #' Scale rows using z-score normalization and clip extreme values
 #' @param x A numeric matrix (genes x samples)
@@ -333,15 +380,50 @@ rename_samples <- function(matrix, name_map) {
 #' @param top_genes Vector of genes to plot
 #' @param sample_names Dataframe with columns og and new (original and new sample names)
 #' @return Scaled and renamed heatmap matrix (genes x samples)
-generate_heatmap_matrix <- function(exprs_norm, meta, top_genes, sample_names) {
-  exp_heat <- Matrix::as.matrix(exprs_norm[top_genes, , drop = FALSE])
+#' Generate heatmap-ready matrix with metadata filtering
+#' @param exprs_norm Normalized gene expression matrix (genes x cells)
+#' @param meta Filtered metadata
+#' @param top_genes Vector of genes to plot
+#' @param sample_names Dataframe with original and new sample names
+#' @return Scaled and renamed matrix (genes x samples)
+generate_heatmap_matrix <- function(exprs_norm,
+                                    meta,
+                                    top_genes,
+                                    sample_names) {
+  
+  # Identify cell IDs to retain
+  if ("X" %in% colnames(meta)) {
+    cells_to_keep <- meta$X
+  } else {
+    cells_to_keep <- rownames(meta)
+  }
+  
+  # Ensure intersection with expression matrix
+  cells_to_keep <- intersect(cells_to_keep,
+                             colnames(exprs_norm))
+  
+  # Subset expression matrix
+  expr_sub <- Matrix::as.matrix(
+    exprs_norm[top_genes, cells_to_keep, drop = FALSE]
+  )
+  
+  # Extract sample labels
   meta_samples <- as.character(meta$Sample)
   
-  exp_ave_mat <- average_by_sample(exp_heat, meta_samples, top_genes)
+  # Compute average per sample
+  exp_ave_mat <- average_by_sample(expr_sub,
+                                   meta_samples,
+                                   top_genes)
+  
+  # Scale rows (z-score clipping)
   exp_ave_scale <- scale_rows(exp_ave_mat)
   
-  name_map <- setNames(sample_names$new, sample_names$og)
-  exp_ave_scale <- rename_samples(exp_ave_scale, name_map)
+  # Rename samples
+  name_map <- setNames(sample_names$new,
+                       sample_names$og)
+  
+  exp_ave_scale <- rename_samples(exp_ave_scale,
+                                  name_map)
   
   return(exp_ave_scale)
 }
