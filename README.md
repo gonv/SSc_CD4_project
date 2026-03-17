@@ -1,7 +1,10 @@
 # Transcriptional landscape of CD4+ T cells in Systemic Sclerosis
 
-**Author:** Gonzalo Villanueva-Martin  
-**Institution:** Instituto de Parasitologia y Biomedicina, Lopez-Neyra / Boston Children's Hospital / Harvard Medical School  
+**Authors:** Gonzalo Villanueva-Martin, Gonzalo Borrego-Yaniz, Marialbert Acosta-Herrera,  José Luis Callejas-Rubio, Norberto Ortego, Norbert Mages, Stefan Börno, Maria Gutierrez-Arcelus, Javier Martin,* and Lara Bossini-Castillo*. 
+**Institution:** Instituto de Parasitologia y Biomedicina, Lopez-Neyra / Boston Children's Hospital / Harvard Medical School
+*These authors contributed equally.
+
+**Repository author**: Gonzalo Villanueva-Martin
 
 ---
 
