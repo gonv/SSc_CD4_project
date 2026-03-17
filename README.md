@@ -31,11 +31,11 @@ To reproduce the R environment:
 conda create -n condaR441 r-base=4.4.1 r-seurat r-tidyverse r-harmony r-sctransform r-fgsea
 ```
 ---
-## Shiny App
+## 🖥️ Shiny App
 This resource is available as a Shiny App [docs-link]: https://mgalab.shinyapps.io/CD4inSScResource/
 
 ---
-## References
+## 📚 References
 <a id="1">[1]</a> 
 Villanueva-Martin G, et al. (2026). Transcriptional landscape of CD4+ T cells in Systemic Sclerosis. bioRxiv.
 
