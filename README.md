@@ -32,7 +32,7 @@ conda create -n condaR441 r-base=4.4.1 r-seurat r-tidyverse r-harmony r-sctransf
 ```
 ---
 ## Shiny App
-[docs-link]: https://mgalab.shinyapps.io/CD4inSScResource/
+This resource is available as a Shiny App [docs-link]: https://mgalab.shinyapps.io/CD4inSScResource/
 
 ---
 ## References
