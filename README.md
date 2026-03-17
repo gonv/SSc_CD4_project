@@ -3,7 +3,6 @@ Single-cell RNA-seq analysis of CD4⁺ T cells in Systemic Sclerosis
 
 **Author:** Gonzalo Villanueva-Martin  
 **Institution:** Instituto de Parasitologia y Biomedicina, Lopez-Neyra / Boston Children's Hospital / Harvard Medical School  
-**Project status:** Ongoing
 
 ---
 
