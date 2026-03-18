@@ -702,27 +702,39 @@ plot_cluster_dotplot <- function(expr_mat,
 generate_demographic_summary <- function(demo_df) {
   
   n_total <- nrow(demo_df)
+  n_patients <- n_total/2
   
   # Sex
   n_female <- sum(demo_df$Sex == "Female", na.rm = TRUE)
   pct_female <- round(n_female / n_total * 100, 1)
   
   # Age
-  age_mean <- round(mean(demo_df$Age, na.rm = TRUE), 1)
-  age_sd   <- round(sd(demo_df$Age, na.rm = TRUE), 1)
+  age_mean_ssc <- round(mean((demo_df %>% filter(condition == "SSc"))$Age, na.rm = TRUE), 1)
+  age_sd_ssc   <- round(sd((demo_df %>% filter(condition == "SSc"))$Age, na.rm = TRUE), 1)
+  
+  age_mean_ctrl <- round(mean((demo_df %>% filter(condition == "CTRL"))$Age, na.rm = TRUE), 1)
+  age_sd_ctrl   <- round(sd((demo_df %>% filter(condition == "CTRL"))$Age, na.rm = TRUE), 1)
   
   summary_list <- list(
     data.frame(
       Variable = "N patients",
-      Value = as.character(n_total)
+      Value = as.character(n_patients)
+    ),
+    data.frame(
+      Variable = "N controls",
+      Value = as.character(n_patients)
     ),
     data.frame(
       Variable = "Female (%)",
       Value = paste0(n_female, " (", pct_female, "%)")
     ),
     data.frame(
-      Variable = "Age (mean ± SD)",
-      Value = paste0(age_mean, " ± ", age_sd)
+      Variable = "SSc Age (mean ± SD)",
+      Value = paste0(age_mean_ssc, " ± ", age_sd_ssc)
+    ),
+    data.frame(
+      Variable = "CTRL Age (mean ± SD)",
+      Value = paste0(age_mean_ctrl, " ± ", age_sd_ctrl)
     )
   )
   
@@ -730,6 +742,8 @@ generate_demographic_summary <- function(demo_df) {
                            c("Sample", "Sex", "Age"))
   
   clinical_summary <- lapply(clinical_cols, function(col) {
+    
+    demo_df <- demo_df %>% filter(condition == "SSc")
     
     values <- demo_df[[col]]
     
@@ -755,6 +769,8 @@ generate_demographic_summary <- function(demo_df) {
 }
 
 plot_demographic_barplot <- function(demo_df) {
+  
+  demo_df <- demo_df %>% filter(condition == "SSc")
   
   clinical_cols <- setdiff(colnames(demo_df),
                            c("Sample", "Sex", "Age"))

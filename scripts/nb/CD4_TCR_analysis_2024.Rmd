@@ -35,9 +35,9 @@ newnames2 <- c("CTRL1","CTRL2","CTRL3","CTRL4","CTRL5","CTRL6","CTRL7","CTRL8","
 
 # T helper subclustering
 ```{r}
-#Convert("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/scRNAseq_SSc_CD4_ThSubclustering.h5ad", dest = "h5seurat", overwrite = TRUE)
+#Convert("/scRNAseq_SSc_CD4_ThSubclustering.h5ad", dest = "h5seurat", overwrite = TRUE)
 
-#CD4Th <- LoadH5Seurat("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/scRNAseq_SSc_CD4_ThSubclustering.h5seurat",assays = "RNA")
+#CD4Th <- LoadH5Seurat("/scRNAseq_SSc_CD4_ThSubclustering.h5seurat",assays = "RNA")
 
 colorTh <- c('#FF55A3','#FF9F55','#559FFF','#55FF9F','#FFC255')
 
@@ -49,7 +49,7 @@ color_con <- c("#9932CC","#228B22")
 # Clonotype analysis -- old
 
 ```{r}
-ThCounts <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/subclusterization/Th_SC/scRNAseq_SScCD4_Subcluster_ThClusters_count_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+ThCounts <- read.csv("/subclusterization/Th_SC/scRNAseq_SScCD4_Subcluster_ThClusters_count_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
 
 ThCounts <- ThCounts[,-1] #quitamos las dos primeras columnas
 ThCounts[10,] <- colSums(ThCounts)
@@ -272,8 +272,8 @@ gt_Statitics
 # Clonal expansion
 ```{r}
 #Load the data
-CD4_CT <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/counts/scRNAseq_SScCD4_Batch_SoskicCellType_count_HGV15PC20_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
-clonalExpansion <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/subclusterization/Th_SC/scRNAseq_SScCD4_subclustering0_ThCellType_clonalExpansion_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+CD4_CT <- read.csv("scRNAseq_SScCD4_Batch_SoskicCellType_count_HGV15PC20_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+clonalExpansion <- read.csv("scRNAseq_SScCD4_subclustering0_ThCellType_clonalExpansion_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
 
 # Load the internal function
 
@@ -1158,7 +1158,7 @@ clonSize
 
 # Epitope analysis - overview
 ```{r}
-adata <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/scRNAseq_SScCD4_adataFnl_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+adata <- read.csv("/scRNAseq_SScCD4_adataFnl_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
 
 adataEpi <- adata[!(is.na(adata$antigen.species) | adata$antigen.species==""), ]
 #From 81637 cells we end up with 9439 when we remove all the cells with no epitope recognition
@@ -1374,7 +1374,7 @@ print(epiPlot)
 # Final plots
 ## Loading the Seurat object
 ```{r}
-SScCD4 <- SeuratDisk::LoadH5Seurat("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/scRNAseq_SSc_CD4_allMerge_PCs_it92_2_5_CT_TCR.h5seurat",assays = "RNA") #Seurat object
+SScCD4 <- SeuratDisk::LoadH5Seurat("scRNAseq_SSc_CD4_allMerge_PCs_it92_2_5_CT_TCR.h5seurat",assays = "RNA") #Seurat object
 
 Idents(SScCD4) <- SScCD4$R09
 SScCD4 <- RenameIdents(object = SScCD4,'0'= 'Tn','1'= 'Tn','2'= 'Tn','3'= 'Tcm','4'= 'Tn','5'= 'Tcm','6'='Tcm','7'= 'Tem','9'='Tcm','10'='Treg','8'='Tn','11'='Temra')
@@ -1386,7 +1386,7 @@ Idents(SScCD4) <- SScCD4$R09
 
 ## Cluster compo analysis
 ```{r}
-#CD4_R09counts <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/counts/scRNAseq_SScCD4_Batch_R09_count_HGV15PC30_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+#CD4_R09counts <- read.csv("/counts/scRNAseq_SScCD4_Batch_R09_count_HGV15PC30_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
 CD4_R09 <- CD4_R09counts
 CD4_R09[is.na(CD4_R09)] <- 0
 
@@ -1707,7 +1707,7 @@ Cluster9
 
 ## Cell type compo analysis
 ```{r}
-CD4_CT <- read.csv("/scratch1/gonv/workbench/SingleCell/00_CD4/it92/counts/scRNAseq_SScCD4_Batch_CorollaCellType_count_HGV15PC20_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
+CD4_CT <- read.csv("/counts/scRNAseq_SScCD4_Batch_CorollaCellType_count_HGV15PC20_it92.csv",header=T, as.is=T,stringsAsFactors=FALSE)
 subtype <- data.frame(sample = c('SSc2','SSc3','SSc4','SSc5','SSc7','SSc10','SSc11','SSc12'), SScSubtype=c('lcSSc','lcSSc','lcSSc','dcSSc','lcSSc','lcSSc','dcSSc','lcSSc'))
 
 cellt <-c("Tn","Tcm","Tem","Treg","Temra")
@@ -1860,7 +1860,7 @@ qCT4
 
 filenameCTPDFCS <- "CellTypeSoskicCompositionClinicalSubtype.pdf"
 filenameCTJPGCS <- "CellTypeSoskicCompositionClinicalSubtype.jpg"
-pathTO <- "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication/"
+pathTO <- "/figures_forPublication/"
 
 ggsave(filenameCTPDFCS,qCT4 ,path = pathTO,dpi = 300,device = 'pdf')
 ggsave(filenameCTJPGCS,qCT4 ,path = pathTO,dpi = 300,device = 'jpg')
@@ -2395,8 +2395,8 @@ combined_final <- plot_grid(
 
 print(combined_final)
 
-ggsave(plot = combined,filename = "Figure2_AC_def2.pdf", path = "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication",dpi = 300, width = 10.3, height = 8, device = 'pdf')
-ggsave(plot = combined_comp_container,filename = "Figure2_D_def2.pdf", path = "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication",dpi = 300, width = 10.3, height = 3.1, device = 'pdf')
+ggsave(plot = combined,filename = "Figure2_AC_def2.pdf", path = "/figures_forPublication",dpi = 300, width = 10.3, height = 8, device = 'pdf')
+ggsave(plot = combined_comp_container,filename = "Figure2_D_def2.pdf", path = "/figures_forPublication",dpi = 300, width = 10.3, height = 3.1, device = 'pdf')
 
 ```
 
@@ -2679,8 +2679,8 @@ combined_final <- plot_grid(
 
 print(combined_final)
 
-ggsave(plot = combined,filename = "Figure2_AC_def2_v2.pdf", path = "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication",dpi = 300, width = 10.3, height = 8, device = 'pdf')
-ggsave(plot = combined_comp_container,filename = "Figure2_D_def2_v2.pdf", path = "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication",dpi = 300, width = 10.3, height = 3.1, device = 'pdf')
+ggsave(plot = combined,filename = "Figure2_AC_def2_v2.pdf", path = "/figures_forPublication",dpi = 300, width = 10.3, height = 8, device = 'pdf')
+ggsave(plot = combined_comp_container,filename = "Figure2_D_def2_v2.pdf", path = "/figures_forPublication",dpi = 300, width = 10.3, height = 3.1, device = 'pdf')
 
 ```
 
@@ -3575,7 +3575,7 @@ comb_fig3 <- plot_grid(
   ncol = 2, 
   rel_widths = c(0.8,1) #Ancho
 )
-ggsave(plot = comb_fig3,filename = "Figure3.pdf", path = "/scratch1/gonv/workbench/SingleCell/00_CD4/it92/figures_forPublication",dpi = 300, width = 10.2, height = 8.46, device = 'pdf')
+ggsave(plot = comb_fig3,filename = "Figure3.pdf", path = "/figures_forPublication",dpi = 300, width = 10.2, height = 8.46, device = 'pdf')
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

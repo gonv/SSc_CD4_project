@@ -173,7 +173,10 @@ meta_th$cell <- meta_th$...1
 meta_th_fil <- meta_th %>% 
   select(cell,ct_Treg)
 
-meta_j <- full_join(meta, meta_th_fil)
+meta_temp <- meta %>%
+  select(-ct_Treg, -ct_sub)
+
+meta_j <- full_join(meta_temp, meta_th_fil)
 
 meta_j <- meta_j %>% 
   mutate(
@@ -212,10 +215,19 @@ meta_j <- meta_j %>%
 meta <- meta_j
 
 
+# Demo ----
+demographic_info <- read.delim("data/demographic_info.txt", sep = "\t", header = TRUE)
+demographic_info <- demographic_info %>%
+  mutate(condition = case_when(
+    str_detect(Sample,regex("SSc")) ~ "SSc", 
+    TRUE ~ "CTRL")
+    )
+write.table(demographic_info, quote = FALSE,file = "data/demographic_info.txt",sep = "\t")
 
 # Save ----
 save(dea_list, file = "data/dea_list_2.RData")
 
 save(list = c("meta","dea_list","dea_list_ps","gseaTF_list","exprs_norm"),file = "data/SScCD4_data_v2.RData")
 
+write.csv(meta,"data/20260124_SSc_CD4_meta_v3.csv")
 
