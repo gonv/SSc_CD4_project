@@ -18,8 +18,6 @@ sc_lib <- c("Seurat","SeuratData","SeuratWrappers","monocle3","destiny")
 lapply(data_lib, require, character.only = TRUE)
 lapply(sc_lib, require, character.only = TRUE)
 
-#source("/scratch1/gonv/workbench/SingleCell/RscriptsForSingleCell/GeneOntologyFunction.R")
-#source("/scratch1/gonv/workbench/SingleCell/RscriptsForSingleCell/GeneSummaryFunction.R")
 ```
 
 # Preliminary load
@@ -35,10 +33,6 @@ newnames2 <- c("CTRL1","CTRL2","CTRL3","CTRL4","CTRL5","CTRL6","CTRL7","CTRL8","
 
 # T helper subclustering
 ```{r}
-#Convert("/scRNAseq_SSc_CD4_ThSubclustering.h5ad", dest = "h5seurat", overwrite = TRUE)
-
-#CD4Th <- LoadH5Seurat("/scRNAseq_SSc_CD4_ThSubclustering.h5seurat",assays = "RNA")
-
 colorTh <- c('#FF55A3','#FF9F55','#559FFF','#55FF9F','#FFC255')
 
 clusterCols <- c("#CDB4DB", "#F78181", "#82CFFD", "#8FCFD1", "#AEB6BF", "#F7ACB4", "#FFB347", "#7FFFD4", "#F4D03F", '#F8D5E1', "#fc6daf",  "#2ECC71")
