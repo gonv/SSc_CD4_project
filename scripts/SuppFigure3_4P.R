@@ -1,10 +1,8 @@
 #!/usr/bin/env Rscript
 
-# Supplementary Figure - TCR clonotype sharing and IFN signatures
+# Supplementary Figure 3 - TCR clonotype sharing and IFN signatures
 # CD4 T cell single-cell RNA-seq analysis in SSc
-# Run from the 02_CD4 project root, as for Figure2_4P.R and Figure3_4P.R.
 # All analyses start from the original cell metadata and expression matrix.
-# Required packages: ggplot2, dplyr, tidyr, Matrix and patchwork.
 
 suppressPackageStartupMessages({
   library(ggplot2)
@@ -18,7 +16,7 @@ suppressPackageStartupMessages({
 # Create output directory and define analysis settings
 # ------------------------------------------------------------
 
-pathTO <- "figures/plots4figures/Figure4_supplementary"
+pathTO <- "figures/plots4figures/FigureS3"
 dir.create(pathTO, recursive = TRUE, showWarnings = FALSE)
 
 # Use the settings applied to the reviewed analyses.
@@ -37,7 +35,7 @@ custom_colors <- c(
 # ------------------------------------------------------------
 
 # Use the latest metadata in ShinyCD4/data, as requested.
-meta <- read.csv("ShinyCD4/data/20260124_SSc_CD4_meta_v3.csv",
+meta <- read.csv("../ShinyCD4/data/20260124_SSc_CD4_meta_v3.csv",
                  row.names = 1,
                  stringsAsFactors = FALSE,
                  colClasses = "character",
@@ -88,7 +86,7 @@ tcr$helper[tcr$helper %in% c("Th1_GZMK", "Th1_GZMB")] <- "Th1"
 # Donor fractions use all expanded clonotypes in that donor as denominator.
 # Cohort statistics give equal weight to each evaluable donor.
 by_donor <- split(tcr, tcr$sample)
-set.seed(2024)
+set.seed(42)
 overlap_tables <- list()
 
 for (resolution in c("major", "helper")) {
@@ -240,6 +238,9 @@ cells <- tcr %>%
             reported_size = as.numeric(clone_id_size), subset = tcr$major) %>%
   add_count(donor, clone_id, name = "clone_size")
 
+if (!isTRUE(all(cells$clone_size == cells$reported_size))) {
+  stop("Recomputed sizes differ from the TCR export.")
+}
 cells$status <- ifelse(cells$clone_size >= 2, "Expanded", "Singleton")
 
 # Use the same score as Figure 2F: mean normalized expression of detected
@@ -263,7 +264,7 @@ for (module in names(signatures)) {
   if (any(!is.finite(cells[[module]]))) stop("Non-finite scores for ", module)
 }
 
-#rm(exprs_norm)
+rm(exprs_norm)
 
 # Use Tcm and Temra as the primary subsets. Summarize both per cell and
 # per clonotype. Clonotypes can contribute to multiple subsets.
@@ -327,32 +328,85 @@ base <- theme_classic(base_size = 10) +
         legend.title = element_text(size = 9),
         plot.margin = margin(8, 10, 8, 8))
 
+# Summarize within-donor excess sharing separately for CTRL and SSc.
+# Each evaluable donor has equal weight. Group-specific maps display effects;
+# the direct SSc versus CTRL tests are reported in Panel C and the tables.
+overlap_cohort_tables <- lapply(overlap_tables, function(analysis) {
+  analysis$donors %>%
+    filter(supported, is.finite(delta_pp)) %>%
+    group_by(condition, state1, state2) %>%
+    summarise(
+      n_donors = n(),
+      observed_pct = mean(100 * observed / n_expanded_clones),
+      expected_pct = mean(100 * expected / n_expanded_clones),
+      delta_pp = mean(delta_pp),
+      .groups = "drop"
+    )
+})
+for (resolution in names(overlap_cohort_tables)) {
+  write.csv(overlap_cohort_tables[[resolution]],
+            file.path(pathTO, paste0(resolution, "_overlap_by_condition.csv")),
+            row.names = FALSE)
+}
+
+# Use a common symmetric color scale for both conditions and annotations.
+overlap_limit <- max(abs(unlist(lapply(overlap_cohort_tables, function(data) {
+  data$delta_pp
+}))))
+overlap_limit <- max(5, ceiling(overlap_limit / 5) * 5)
+
 heatmap <- function(resolution, states, title) {
-  d <- overlap_tables[[resolution]]$summary
-  d$state1[d$state1 == "Thf"] <- "Tfh"
-  d$state2[d$state2 == "Thf"] <- "Tfh"
+
+  plot_data <- overlap_cohort_tables[[resolution]]
+  plot_data$condition <- factor(plot_data$condition, levels = c("CTRL", "SSc"))
+  plot_data$state1[plot_data$state1 == "Thf"] <- "Tfh"
+  plot_data$state2[plot_data$state2 == "Thf"] <- "Tfh"
+
   # Match pair orientation to the displayed state ordering.
-  reverse <- match(d$state1, states) > match(d$state2, states)
-  old <- d$state1
-  d$state1[reverse] <- d$state2[reverse]
-  d$state2[reverse] <- old[reverse]
-  ggplot(d, aes(state1, state2, fill = delta_pp)) +
-    geom_tile(colour = "white", linewidth = .8) +
-    geom_text(aes(label = sprintf("%+.1f%s", delta_pp,
-                                  ifelse(p_BH < .05, "*", ""))), size = 3) +
+
+  reverse <- match(plot_data$state1, states) > match(plot_data$state2, states)
+  first_state <- plot_data$state1
+  plot_data$state1[reverse] <- plot_data$state2[reverse]
+  plot_data$state2[reverse] <- first_state[reverse]
+
+  ggplot(plot_data, aes(state1, state2, fill = delta_pp)) +
+    geom_tile(colour = "white", linewidth = 0.8) +
+    geom_text(aes(label = sprintf("%+.1f", delta_pp)), size = 3.2) +
+    facet_wrap(~condition, ncol = 1) +
+
     scale_x_discrete(limits = states, drop = FALSE) +
     scale_y_discrete(limits = rev(states), drop = FALSE) +
-    scale_fill_gradient2(low = "#397BA5", mid = "#FAFAF8", high = "#D46C43",
-                         midpoint = 0, limits = c(-23,23),
-                         breaks = c(-20,-10,0,10,20),
-                         name = "Observed - expected\n(pp)") +
+
+    scale_fill_gradient2(
+      low = "#397BA5", mid = "#FAFAF8", high = "#D46C43",
+      midpoint = 0, limits = c(-overlap_limit, overlap_limit),
+      name = "Observed - expected\n(pp)"
+    ) +
+
     coord_equal() +
     labs(title = title, x = NULL, y = NULL) +
-    base + theme(axis.line = element_blank(), axis.ticks = element_blank(),
-                 legend.key.height = grid::unit(.4, "cm"))
+
+    base +
+    theme(
+      axis.line = element_blank(),
+      axis.ticks = element_blank(),
+      strip.background = element_blank(),
+      strip.text = element_text(face = "bold", size = 11),
+      legend.key.height = grid::unit(0.4, "cm")
+    )
+
 }
-overlap_major_plot <- heatmap("major", c("Tn","Tcm","Tem","Temra","Treg"), "Clonotype sharing across major subsets")
-overlap_helper_plot <- heatmap("helper", c("Tn","Th1","Th2","Th17","Tfh","Treg"), "Clonotype sharing across annotated states")
+
+
+overlap_major_plot <- heatmap(
+  "major", c("Tn", "Tcm", "Tem", "Temra", "Treg"),
+  "Clonotype sharing across major subsets"
+)
+overlap_helper_plot <- heatmap(
+  "helper", c("Tn", "Th1", "Th2", "Th17", "Tfh", "Treg"),
+  "Clonotype sharing across annotated states"
+)
+
 
 major <- overlap_tables$major$donors
 helper <- overlap_tables$helper$donors
@@ -413,9 +467,13 @@ ifn_test_caption <- if (all(!is.na(primary_ifn_tests$p_BH)) &&
 }
 
 figure <- ((overlap_major_plot | overlap_helper_plot) / (cohort_plot | ifn_plot)) +
-  plot_layout(heights = c(1,1), widths = c(1,1)) +
+
+  plot_layout(heights = c(1.7, 1)) +
+
   plot_annotation(tag_levels = "A",
-    caption = paste("A-B: Equal-weight donor means; * BH-adjusted permutation P < 0.05.",
+
+    caption = paste("A-B: Mean observed - expected overlap within each cohort; a common color scale is used.",
+
                     "C-D: Each point represents one donor; black marks show means.",
                     paste0("D: ", ifn_counts, ". Minimum ", min_cells, " cells per category. ", ifn_test_caption),
                     sep = "\n"),
@@ -428,22 +486,30 @@ figure <- ((overlap_major_plot | overlap_helper_plot) / (cohort_plot | ifn_plot)
 # Save the supplementary figure and individual panels
 # ------------------------------------------------------------
 
-# Keep the figure identifier generic until the supplement is numbered.
+# Supplementary Figure 3
+# REVIEW UPDATE 431 END
 figure
 
 ggsave(plot = figure,
-       filename = file.path(pathTO, "Figure4_supplementary.png"),
-       width = 12, height = 10, dpi = 300, bg = "white")
+
+       filename = file.path(pathTO, "FigureS3.png"),
+       width = 12, height = 15, dpi = 300, bg = "white")
+
 ggsave(plot = figure,
-       filename = file.path(pathTO, "Figure4_supplementary.pdf"),
-       width = 12, height = 10, bg = "white")
+
+       filename = file.path(pathTO, "FigureS3.pdf"),
+       width = 12, height = 15, bg = "white")
+
 
 figure_panels <- list(A = overlap_major_plot, B = overlap_helper_plot,
                       C = cohort_plot, D = ifn_plot)
 for (panel_name in names(figure_panels)) {
   ggsave(plot = figure_panels[[panel_name]],
-         filename = file.path(pathTO, paste0("Figure4_supplementary_", panel_name, ".pdf")),
-         width = 6, height = 5, bg = "white")
+
+         filename = file.path(pathTO, paste0("FigureS3_", panel_name, ".pdf")),
+         width = 6,
+         height = if (panel_name %in% c("A", "B")) 9 else 5, bg = "white")
+
 }
 
 writeLines(c(paste("Within-donor permutations:", n_perm),
